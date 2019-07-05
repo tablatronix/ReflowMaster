@@ -245,7 +245,7 @@ int GetGraphTime( int x )
 }
 
 // Obtain the current profile
-ReflowGraph& CurrentGraph()
+ReflowGraph CurrentGraph()
 {
   return solderPaste[ currentGraphIndex ];
 }
