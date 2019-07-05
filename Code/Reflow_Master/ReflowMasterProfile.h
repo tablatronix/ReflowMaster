@@ -32,6 +32,10 @@ HISTORY:
       Fan kick in time if using a fan ( int, seconds )
       Open door message time ( int, seconds )
  */
+
+#ifndef ReflowGraph_h
+#define ReflowGraph_h
+
 #define ELEMENTS(x)   (sizeof(x) / sizeof(x[0]))
 
  class ReflowGraph
@@ -134,6 +138,7 @@ HISTORY:
      }
  };
 
+#endif
 
 /*
  * End ReflowGraphs
