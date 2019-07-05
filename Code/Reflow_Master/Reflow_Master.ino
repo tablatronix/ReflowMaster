@@ -50,8 +50,8 @@ HISTORY:
 // #define TFT_CS 3
 // #define TFT_RESET 1
 
-#define TFT_DC    5 // D1
-#define TFT_CS    4 // D2
+#define TFT_DC    15 // D1
+#define TFT_CS    -1 // D2
 #define TFT_RESET -1
 
 // MAX 31855 Pins
@@ -313,7 +313,7 @@ void SetCurrentGraph( int index )
   // }
 }
 
-void doloop()
+void doLoop()
 {
   // Used by OneButton to poll for button inputs
   // button0.tick();
@@ -337,230 +337,228 @@ void doloop()
     delay(5000);
     // Show the main menu
     ShowMenu();
-    // ShowMenuOptions( true );
+    ShowMenuOptions( true );
     Serial.println("back in loop");
   }
- }
-
-//   else if ( state == 1 ) // WARMUP - We sit here until the probe reaches the starting temp for the profile
-//   {
-//     Serial.println("warmup");
-//     if ( nextTempRead < millis() ) // we only read the probe every second
-//     {
-//       nextTempRead = millis() + 1000;
+  else if ( state == 1 ) // WARMUP - We sit here until the probe reaches the starting temp for the profile
+  {
+    Serial.println("warmup");
+    if ( nextTempRead < millis() ) // we only read the probe every second
+    {
+      nextTempRead = millis() + 1000;
   
-//       ReadCurrentTemp();
-//       MatchTemp();
+      ReadCurrentTemp();
+      MatchTemp();
 
-//       if ( currentTemp >= GetGraphValue(0) )
-//       {
-//         // We have reached the starting temp for the profile, so lets start baking our boards!
-//         lastTemp = currentTemp;
-//         avgReadCount = 0;
-//         currentTempAvg = 0;
+      if ( currentTemp >= GetGraphValue(0) )
+      {
+        // We have reached the starting temp for the profile, so lets start baking our boards!
+        lastTemp = currentTemp;
+        avgReadCount = 0;
+        currentTempAvg = 0;
         
-//         StartReflow();
-//       }
-//       else if ( currentTemp > 0 )
-//       {
-//         // Show the current probe temp so we can watch as it reaches the minimum starting value
-//         tft.setTextColor( YELLOW, BLACK );
-//         tft.setTextSize(5);
-//         println_Center( tft, "  "+String( round( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
-//       }
-//     }
-//     return;
-//   }
-//   else if ( state == 3 ) // FINISHED
-//   {
-//     // Currently not used
-//     return;
-//   }
-//   else if ( state == 11 || state == 12 || state == 13 ) // SETTINGS
-//   {
-//     // Currently not used
-//     return;
-//   }
-//   else if ( state == 10 ) // MENU
-//   {
-//     Serial.println("loop menu");
-//     if ( nextTempRead < millis() )
-//     {
-//       nextTempRead = millis() + 1000;
+        StartReflow();
+      }
+      else if ( currentTemp > 0 )
+      {
+        // Show the current probe temp so we can watch as it reaches the minimum starting value
+        tft.setTextColor( YELLOW, BLACK );
+        tft.setTextSize(5);
+        println_Center( tft, "  "+String( round( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+      }
+    }
+    return;
+  }
+  else if ( state == 3 ) // FINISHED
+  {
+    // Currently not used
+    return;
+  }
+  else if ( state == 11 || state == 12 || state == 13 ) // SETTINGS
+  {
+    // Currently not used
+    return;
+  }
+  else if ( state == 10 ) // MENU
+  {
+    Serial.println("loop menu");
+    if ( nextTempRead < millis() )
+    {
+      nextTempRead = millis() + 1000;
 
-//       // We show the current probe temp in the men screen just for info
-//       ReadCurrentTemp();
+      // We show the current probe temp in the men screen just for info
+      ReadCurrentTemp();
 
-//       if ( currentTemp > 0 )
-//       {
-//         tft.setTextColor( YELLOW, BLACK );
-//         tft.setTextSize(5);
-//         int third = tft.width()/4;
-//         println_Center( tft, "  "+String( round( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
-//       }
-//     }
-//     delay(100);
-//     return;
-//   }
-//   else if ( state == 15 )
-//   {
-//     // Currently not used
-//     return;
-//   }
-//   else if ( state == 16 ) // calibration - not currently used
-//   {
-//     if ( nextTempRead < millis() )
-//     {
-//       nextTempRead = millis() + 1000;
+      if ( currentTemp > 0 )
+      {
+        tft.setTextColor( YELLOW, BLACK );
+        tft.setTextSize(5);
+        int third = tft.width()/4;
+        println_Center( tft, "  "+String( round( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+      }
+    }
+    delay(100);
+    return;
+  }
+  else if ( state == 15 )
+  {
+    // Currently not used
+    return;
+  }
+  else if ( state == 16 ) // calibration - not currently used
+  {
+    if ( nextTempRead < millis() )
+    {
+      nextTempRead = millis() + 1000;
   
-//       ReadCurrentTemp();
+      ReadCurrentTemp();
 
-//       MatchCalibrationTemp();
+      MatchCalibrationTemp();
   
-//       if ( calibrationState < 2 )
-//       {
-//         tft.setTextColor( CYAN, BLACK );
-//         tft.setTextSize(2);
+      if ( calibrationState < 2 )
+      {
+        tft.setTextColor( CYAN, BLACK );
+        tft.setTextSize(2);
 
-//         if ( calibrationState == 0 )
-//         {
-//           if ( currentTemp < GetGraphValue(0) )
-//             println_Center( tft, "WARMING UP", tft.width() / 2, ( tft.height() / 2 ) - 15 );
-//           else
-//             println_Center( tft, "HEAT UP SPEED", tft.width() / 2, ( tft.height() / 2 ) - 15 );
+        if ( calibrationState == 0 )
+        {
+          if ( currentTemp < GetGraphValue(0) )
+            println_Center( tft, "WARMING UP", tft.width() / 2, ( tft.height() / 2 ) - 15 );
+          else
+            println_Center( tft, "HEAT UP SPEED", tft.width() / 2, ( tft.height() / 2 ) - 15 );
             
-//           println_Center( tft, "TARGET "+String( GetGraphValue(1) )+"c in " + String( GetGraphTime(1) ) +"s", tft.width() / 2, ( tft.height() -18 ) );
-//         }
-//         else if ( calibrationState == 1 )
-//         {
-//           println_Center( tft, "COOL DOWN LEVEL", tft.width() / 2, ( tft.height() / 2 ) - 15 );
-//           tft.fillRect( 0, tft.height()-30, tft.width(), 30, BLACK );
-//         }
+          println_Center( tft, "TARGET "+String( GetGraphValue(1) )+"c in " + String( GetGraphTime(1) ) +"s", tft.width() / 2, ( tft.height() -18 ) );
+        }
+        else if ( calibrationState == 1 )
+        {
+          println_Center( tft, "COOL DOWN LEVEL", tft.width() / 2, ( tft.height() / 2 ) - 15 );
+          tft.fillRect( 0, tft.height()-30, tft.width(), 30, BLACK );
+        }
 
 
-//         // only show the timer when we have hit the profile starting temp
-//         if (currentTemp >= GetGraphValue(0) )
-//         {
-//           // adjust the timer colour based on good or bad values
-//           if ( calibrationState == 0 )
-//           {
-//             if ( calibrationSeconds <= GetGraphTime(1) )
-//               tft.setTextColor( WHITE, BLACK );
-//             else
-//               tft.setTextColor( ORANGE, BLACK );
-//           }
-//           else
-//           {
-//             tft.setTextColor( WHITE, BLACK );
-//           }
+        // only show the timer when we have hit the profile starting temp
+        if (currentTemp >= GetGraphValue(0) )
+        {
+          // adjust the timer colour based on good or bad values
+          if ( calibrationState == 0 )
+          {
+            if ( calibrationSeconds <= GetGraphTime(1) )
+              tft.setTextColor( WHITE, BLACK );
+            else
+              tft.setTextColor( ORANGE, BLACK );
+          }
+          else
+          {
+            tft.setTextColor( WHITE, BLACK );
+          }
           
-//           tft.setTextSize(4);
-//           println_Center( tft, " "+String( calibrationSeconds )+" secs ", tft.width() / 2, ( tft.height() / 2 ) +20 );
-//         }
-//         tft.setTextSize(5);
-//         tft.setTextColor( YELLOW, BLACK );
-//         println_Center( tft, " "+String( round( currentTemp ) )+"c ", tft.width() / 2, ( tft.height() / 2 ) + 65 );
+          tft.setTextSize(4);
+          println_Center( tft, " "+String( calibrationSeconds )+" secs ", tft.width() / 2, ( tft.height() / 2 ) +20 );
+        }
+        tft.setTextSize(5);
+        tft.setTextColor( YELLOW, BLACK );
+        println_Center( tft, " "+String( round( currentTemp ) )+"c ", tft.width() / 2, ( tft.height() / 2 ) + 65 );
 
         
-//       }
-//       else if ( calibrationState == 2 )
-//       {
-//         calibrationState = 3;
+      }
+      else if ( calibrationState == 2 )
+      {
+        calibrationState = 3;
         
-//         tft.setTextColor( GREEN, BLACK );
-//         tft.setTextSize(2);
-//         tft.fillRect( 0, (tft.height() / 2 ) - 45, tft.width(), (tft.height() / 2 ) + 45, BLACK );
-//         println_Center( tft, "RESULTS!", tft.width() / 2, ( tft.height() / 2 ) - 45 );
+        tft.setTextColor( GREEN, BLACK );
+        tft.setTextSize(2);
+        tft.fillRect( 0, (tft.height() / 2 ) - 45, tft.width(), (tft.height() / 2 ) + 45, BLACK );
+        println_Center( tft, "RESULTS!", tft.width() / 2, ( tft.height() / 2 ) - 45 );
 
-//         tft.setTextColor( WHITE, BLACK );
-//         tft.setCursor( 20, ( tft.height() / 2 ) - 10 );
-//         tft.print( "RISE " );
-//         if ( calibrationUpMatch )
-//         {
-//           tft.setTextColor( GREEN, BLACK );
-//           tft.print( "PASS" );
-//         }
-//         else
-//         {
-//           tft.setTextColor( ORANGE, BLACK );
-//           tft.print( "FAIL " );
-//           tft.setTextColor( WHITE, BLACK );
-//           tft.print( "REACHED " + String( round(calibrationRiseVal * 100) ) +"%") ;
-//         }
+        tft.setTextColor( WHITE, BLACK );
+        tft.setCursor( 20, ( tft.height() / 2 ) - 10 );
+        tft.print( "RISE " );
+        if ( calibrationUpMatch )
+        {
+          tft.setTextColor( GREEN, BLACK );
+          tft.print( "PASS" );
+        }
+        else
+        {
+          tft.setTextColor( ORANGE, BLACK );
+          tft.print( "FAIL " );
+          tft.setTextColor( WHITE, BLACK );
+          tft.print( "REACHED " + String( round(calibrationRiseVal * 100) ) +"%") ;
+        }
 
-//         tft.setTextColor( WHITE, BLACK );
-//         tft.setCursor( 20, ( tft.height() / 2 ) + 20 );
-//         tft.print( "DROP " );
-//         if ( calibrationDownMatch )
-//         {
-//           tft.setTextColor( GREEN, BLACK );
-//           tft.print( "PASS" );
-//           tft.setTextColor( WHITE, BLACK );
-//           tft.print( "DROPPED " + String( round(calibrationDropVal * 100) ) +"%") ;
-//         }
-//         else
-//         {
-//           tft.setTextColor( ORANGE, BLACK );
-//           tft.print( "FAIL " );
-//           tft.setTextColor( WHITE, BLACK );
-//           tft.print( "DROPPED " + String( round(calibrationDropVal * 100) ) +"%") ;
+        tft.setTextColor( WHITE, BLACK );
+        tft.setCursor( 20, ( tft.height() / 2 ) + 20 );
+        tft.print( "DROP " );
+        if ( calibrationDownMatch )
+        {
+          tft.setTextColor( GREEN, BLACK );
+          tft.print( "PASS" );
+          tft.setTextColor( WHITE, BLACK );
+          tft.print( "DROPPED " + String( round(calibrationDropVal * 100) ) +"%") ;
+        }
+        else
+        {
+          tft.setTextColor( ORANGE, BLACK );
+          tft.print( "FAIL " );
+          tft.setTextColor( WHITE, BLACK );
+          tft.print( "DROPPED " + String( round(calibrationDropVal * 100) ) +"%") ;
 
-//           tft.setTextColor( WHITE, BLACK );
-//           tft.setCursor( 20, ( tft.height() / 2 ) + 40 );
-//           tft.print( "RECOMMEND ADDING FAN") ;
-//         }
-//       }
-//     }
-//   }
-//   else // state is 2 - REFLOW
-//   {
-//     if ( nextTempAvgRead < millis() )
-//     {
-//       nextTempAvgRead = millis() + 100;
-//       ReadCurrentTempAvg();
-//     }
-//     if ( nextTempRead < millis() )
-//     {
-//       nextTempRead = millis() + 1000;
+          tft.setTextColor( WHITE, BLACK );
+          tft.setCursor( 20, ( tft.height() / 2 ) + 40 );
+          tft.print( "RECOMMEND ADDING FAN") ;
+        }
+      }
+    }
+  }
+  else // state is 2 - REFLOW
+  {
+    if ( nextTempAvgRead < millis() )
+    {
+      nextTempAvgRead = millis() + 100;
+      ReadCurrentTempAvg();
+    }
+    if ( nextTempRead < millis() )
+    {
+      nextTempRead = millis() + 1000;
 
-//       // Set the temp from the average
-//       currentTemp = ( currentTempAvg / avgReadCount );
-//       // clear the variables for next run
-//       avgReadCount = 0;
-//       currentTempAvg = 0;
+      // Set the temp from the average
+      currentTemp = ( currentTempAvg / avgReadCount );
+      // clear the variables for next run
+      avgReadCount = 0;
+      currentTempAvg = 0;
 
-//       // Control the SSR
-//       MatchTemp();
+      // Control the SSR
+      MatchTemp();
 
-//       if ( currentTemp > 0 )
-//       {
-//         timeX++;
+      if ( currentTemp > 0 )
+      {
+        timeX++;
 
-//         if ( timeX > CurrentGraph().completeTime )
-//         {
-//           EndReflow();
-//         }
-//         else 
-//         {
-//           Graph(tft, timeX, currentTemp, 30, 220, 270, 180 );
+        if ( timeX > CurrentGraph().completeTime )
+        {
+          EndReflow();
+        }
+        else 
+        {
+          Graph(tft, timeX, currentTemp, 30, 220, 270, 180 );
 
-//           if ( timeX < CurrentGraph().fanTime )
-//           {
-//             float wantedTemp = CurrentGraph().wantedCurve[ (int)timeX ];
-//             DrawHeading( String( round( currentTemp ) ) + "/" + String( (int)wantedTemp )+"c", currentPlotColor, BLACK );
+          if ( timeX < CurrentGraph().fanTime )
+          {
+            float wantedTemp = CurrentGraph().wantedCurve[ (int)timeX ];
+            DrawHeading( String( round( currentTemp ) ) + "/" + String( (int)wantedTemp )+"c", currentPlotColor, BLACK );
 
-// #ifdef DEBUG
-//             tft.setCursor( 60, 40 );
-//             tft.setTextSize(2);
-//             tft.fillRect( 60, 40, 80, 20, BLACK );
-//             tft.println( String( round((currentDuty/256) * 100 )) +"%" );
-// #endif
-//           }
-//         }
-//       }
-//     }
-//   }
-// }
+#ifdef DEBUG
+            tft.setCursor( 60, 40 );
+            tft.setTextSize(2);
+            tft.fillRect( 60, 40, 80, 20, BLACK );
+            tft.println( String( round((currentDuty/256) * 100 )) +"%" );
+#endif
+          }
+        }
+      }
+    }
+  }
+}
 
 // This is where the SSR is controlled via PWM
 void SetRelayFrequency( int duty )
@@ -870,47 +868,47 @@ void BootScreen()
 
 void ShowMenu()
 {
-  // #ifdef DEBUG
-  // Serial.println("ShowMenu");
-  // #endif
+  #ifdef DEBUG
+  Serial.println("ShowMenu");
+  #endif
 
-  // state = 10;
-  // // SetRelayFrequency( 0 );
+  state = 10;
+  // SetRelayFrequency( 0 );
 
-  // // set = flash_store.read();
-  // #ifdef DEBUG
-  //   Serial.println("TFT Show Menu");
-  // #endif  
-  // // tft.fillScreen(ILI9341_BLACK);
-  // // tft.fillScreen(ILI9341_BLACK);
-  // Serial.println("clear display");
+  // set = flash_store.read();
+  #ifdef DEBUG
+    Serial.println("TFT Show Menu");
+  #endif  
+  tft.fillScreen(ILI9341_BLACK);
+  tft.fillScreen(ILI9341_BLACK);
+  Serial.println("clear display");
   
-  // // tft.setTextColor( WHITE, BLACK );
-  // // tft.setTextSize(2);
-  // // tft.setCursor( 20, 20 );
-  // // tft.println( "CURRENT PASTE" );
-  // Serial.println("disp curr paste");
-  // delay(1000);
+  tft.setTextColor( WHITE, BLACK );
+  tft.setTextSize(2);
+  tft.setCursor( 20, 20 );
+  tft.println( "CURRENT PASTE" );
+  Serial.println("disp curr paste");
+  delay(1000);
 
-  // // tft.setTextColor( YELLOW, BLACK );
-  // // tft.setCursor( 20, 40 ); 
-  // // tft.println( CurrentGraph().n );
-  // // tft.setCursor( 20, 60 );
-  // // tft.println( String(CurrentGraph().tempDeg) +"deg");
-  // Serial.println("disp temperature");
+  tft.setTextColor( YELLOW, BLACK );
+  tft.setCursor( 20, 40 ); 
+  tft.println( CurrentGraph().n );
+  tft.setCursor( 20, 60 );
+  tft.println( String(CurrentGraph().tempDeg) +"deg");
+  Serial.println("disp temperature");
 
-  // if ( newSettings )
-  // {
-  //   // tft.setTextColor( CYAN, BLACK );
-  //   // println_Center( tft, "Settings Stomped!!", tft.width() / 2, tft.height() - 80 );
-  // }
+  if ( newSettings )
+  {
+    tft.setTextColor( CYAN, BLACK );
+    println_Center( tft, "Settings Stomped!!", tft.width() / 2, tft.height() - 80 );
+  }
 
-  // // tft.setTextSize(1);
-  // // tft.setTextColor( WHITE, BLACK );
-  // // println_Center( tft, "Reflow Master - PCB v2018-2, Code v" + ver, tft.width() / 2, tft.height() - 20 );
+  tft.setTextSize(1);
+  tft.setTextColor( WHITE, BLACK );
+  println_Center( tft, "Reflow Master - PCB v2018-2, Code v" + ver, tft.width() / 2, tft.height() - 20 );
 
-  // delay(5000);
-  // // ShowMenuOptions( true );
+  delay(5000);
+  // ShowMenuOptions( true );
   Serial.println("showmenu done");
 }
 
@@ -1895,14 +1893,15 @@ tc.read();
 
 void loop(){
   Serial.println("loop");
-  for(int i=0;i<10;i++){
-    // doloop();
-    LoadPaste();
-    SetCurrentGraph( set.paste ); // this causes the bug, 
+  // for(int i=0;i<10;i++){
+  //   // doloop();
+  //   LoadPaste();
+  //   SetCurrentGraph( set.paste ); // this causes the bug, 
 
-    delay(5000);
-    Serial.println(micros());
-  }
+  //   delay(5000);
+  //   Serial.println(micros());
+  // }
+  doLoop();
 }
 
 
