@@ -35,7 +35,7 @@ HISTORY:
 #include "Adafruit_GFX.h" // Library Manager
 #include "Adafruit_ILI9341.h" // Library Manager
 #include "MAX31855.h" // by Rob Tillaart Library Manager
-// #include "OneButton.h" // Library Manager
+#include "OneButton.h" // Library Manager
 #include "ReflowMasterProfile.h" 
 // #include <FlashStorage.h> // Library Manager
 
@@ -53,7 +53,7 @@ HISTORY:
 // @TODO use CS and get tft and max31855 working with hspi pins
 #define TFT_DC    15 // D1
 #define TFT_CS    -1 // D2
-#define TFT_RESET -1
+#define TFT_RESET D1
 
 // MAX 31855 Pins
 // #define MAXDO   14
@@ -64,13 +64,15 @@ HISTORY:
 #define MAXCS   D4 // 2
 #define MAXCLK  D0 // 16
 
+uint16_t rotation = 3;
+
 // #ifdef ESP8266
 // #define A1 A0
 // #define A2 A0
 // #define A3 A0
 // #endif
 
-#define BUTTON0 A0 // menu buttons
+#define BUTTON0 0 // menu buttons
 #define BUTTON1 A0 // menu buttons
 #define BUTTON2 A0 // menu buttons
 #define BUTTON3 A0 // menu buttons
@@ -181,7 +183,7 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC,TFT_RESET);
 MAX31855 tc(MAXCLK, MAXCS, MAXDO);
 
 // Initialise the buttons using OneButton library
-// OneButton button0(BUTTON0, false);
+OneButton button0(BUTTON0, false);
 // OneButton button1(BUTTON1, false);
 // OneButton button2(BUTTON2, false);
 // OneButton button3(BUTTON3, false);
@@ -245,7 +247,7 @@ int GetGraphTime( int x )
 }
 
 // Obtain the current profile
-ReflowGraph CurrentGraph()
+ReflowGraph& CurrentGraph()
 {
   return solderPaste[ currentGraphIndex ];
 }
@@ -257,9 +259,9 @@ void SetCurrentGraph( int index )
   Serial.println("SetCurrentGraph");
   #endif
   currentGraphIndex = index;
-  graphRangeMax_X = CurrentGraph().MaxTime();
-  graphRangeMax_Y = CurrentGraph().MaxValue() + 5; // extra padding
-  graphRangeMin_Y = CurrentGraph().MinValue();
+  graphRangeMax_X = solderPaste[ currentGraphIndex ].MaxTime();
+  graphRangeMax_Y = solderPaste[ currentGraphIndex ].MaxValue() + 5; // extra padding
+  graphRangeMin_Y = solderPaste[ currentGraphIndex ].MinValue();
 
 #ifdef DEBUG
   Serial.print("Setting Paste: ");
@@ -278,8 +280,8 @@ void SetCurrentGraph( int index )
   // Serial.println();
   // Serial.print(CurrentGraph().len,4);
   // Serial.println();
-  // baseCurve.setPoints(solderPaste[ currentGraphIndex ].reflowGraphX, solderPaste[ currentGraphIndex ].reflowGraphY, solderPaste[ currentGraphIndex ].reflowTangents, solderPaste[ currentGraphIndex ].len);
-  baseCurve.setPoints(CurrentGraph().reflowGraphX, CurrentGraph().reflowGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
+  baseCurve.setPoints(solderPaste[ currentGraphIndex ].reflowGraphX, solderPaste[ currentGraphIndex ].reflowGraphY, solderPaste[ currentGraphIndex ].reflowTangents, solderPaste[ currentGraphIndex ].len);
+  // baseCurve.setPoints(CurrentGraph().reflowGraphX, CurrentGraph().reflowGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
   // baseCurve.setDegree( Hermite );
   // double x[7] = {-1,0,1,2,3,4, 5};
   // double y[7] = { 0,0,8,5,2,10,10};
@@ -289,12 +291,15 @@ void SetCurrentGraph( int index )
   float baseGraphY[7] = { 27, 90, 130, 138, 165, 138, 27 }; // value
   // baseCurve.setPoints(baseGraphX, baseGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
 
-  // // Re-interpolate data based on spline
-  // for( int ii = 0; ii <= graphRangeMax_X; ii+= 1 )
-  // {
-  //   // solderPaste[ currentGraphIndex ].wantedCurve[ii] = baseCurve.value(ii);
-  //   delay(0);
-  // }
+  Serial.println("re interpolate splines");
+  // Re-interpolate data based on spline
+  for( int ii = 0; ii <= graphRangeMax_X; ii+= 1 )
+  {
+    // Serial.println(solderPaste[ currentGraphIndex ].wantedCurve[ii]);
+    // solderPaste[ currentGraphIndex ].wantedCurve[ii] = 1;
+    delay(0);
+  }
+
   // calculate the biggest graph movement delta
   float lastWanted = -1;
   // for ( int i = 0; i < solderPaste[ currentGraphIndex ].offTime; i++ )
@@ -317,11 +322,11 @@ void SetCurrentGraph( int index )
 void doLoop()
 {
   // Used by OneButton to poll for button inputs
-  // button0.tick();
+  button0.tick();
   // button1.tick();
   // button2.tick();
   // button3.tick();
-  // Serial.println(state);
+  Serial.println(state);
   // Serial.println(ESP.getFreeHeap());
   // Serial.println(ESP.getHeapFragmentation());
   // Serial.println(ESP.getMaxFreeBlockSize());
@@ -333,11 +338,15 @@ void doLoop()
   {
     // Load up the profiles
     LoadPaste();
+    delay(2000);
     // Set the current profile based on last selected
     SetCurrentGraph( set.paste ); // this causes the bug, 
-    delay(1000);
+    delay(2000);
     // Show the main menu
     ShowMenu();
+    delay(2000);
+    ShowMenuOptions(true);
+    delay(2000);
     Serial.println("back in loop");
   }
   else if ( state == 1 ) // WARMUP - We sit here until the probe reaches the starting temp for the profile
@@ -388,7 +397,7 @@ void doLoop()
 
       // We show the current probe temp in the men screen just for info
       ReadCurrentTemp();
-
+      Serial.println((String)currentTemp);
       if ( currentTemp > 0 )
       {
         tft.setTextColor( YELLOW, BLACK );
@@ -664,8 +673,8 @@ void ReadCurrentTemp()
   Serial.print(" status: ");
   Serial.println( status );
   #endif
-  // float internal = tc.getInternal();
-  // currentTemp = tc.getTemperature() + set.tempOffset;
+  float internal = tc.getInternal();
+  currentTemp = tc.getTemperature() + set.tempOffset;
 }
 
 // This is where the magic happens for temperature matching
@@ -850,7 +859,7 @@ void DrawBaseGraph()
 
 void BootScreen()
 {
-  tft.setRotation(3);
+  tft.setRotation(rotation);
   tft.fillScreen(BLACK);
 
   tft.setTextColor( GREEN, BLACK );
@@ -880,7 +889,6 @@ void ShowMenu()
     Serial.println("TFT Show Menu");
   #endif  
   tft.fillScreen(ILI9341_BLACK);
-  tft.fillScreen(ILI9341_BLACK);
   Serial.println("clear display");
   
   tft.setTextColor( WHITE, BLACK );
@@ -897,6 +905,7 @@ void ShowMenu()
   tft.println( String(CurrentGraph().tempDeg) +"deg");
   Serial.println("disp temperature");
 
+  // causes crashes also, this makes no sense
   if ( newSettings )
   {
     tft.setTextColor( CYAN, BLACK );
@@ -905,10 +914,19 @@ void ShowMenu()
 
   tft.setTextSize(1);
   tft.setTextColor( WHITE, BLACK );
-  println_Center( tft, "Reflow Master - PCB v2018-2, Code v" + ver, tft.width() / 2, tft.height() - 20 );
+    // d.setCursor( 54,152 );
+    // d.println( "Settings Stomped!!" );
+    
+    // tft.setCursor( 45,216 );
+    // tft.println( "Reflow Master - PCB v2018-2, Code v1.03" );  
+    println_Center( tft, "Reflow Master - PCB v2018-2, Code v" + ver, tft.width() / 2, tft.height() - 20 );
+    // println_Center( tft, "Reflow Master - PCB v2018-2, Code v" + (String)ver, 80,110);
+    // Serial.println("SET FAULT");
+    // Serial.flush();
+    // setFault(tft);
 
   // delay(5000);
-  ShowMenuOptions( true );
+  // ShowMenuOptions( true ); // causes crashes why!!!!!
   Serial.println("showmenu done");
 }
 
@@ -1026,7 +1044,6 @@ void ShowMenuOptions( bool clearAll )
       tft.fillRect( tft.width()-100,  buttonPosY[i]-2, 100, buttonHeight+4, BLACK );
       delay(0);
   }
-  
   if ( state == 10 )
   {
     // button 0
@@ -1142,7 +1159,6 @@ void UpdateSettingsPointer()
       tft.fillRect( 0, 20, 20, tft.height()-20, BLACK );
       tft.setCursor( 5, ( 50 + ( 20 * settings_pointer ) ) );
       tft.println(">");
-
 
       tft.setTextSize(1);
       tft.setTextColor( GREEN, BLACK );
@@ -1734,12 +1750,12 @@ void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, d
     d.setCursor(w - 25 , gy - 10);
     d.println(xlabel);
 
-    tft.setRotation(0);
+    tft.setRotation(rotation-1);
     d.setTextSize(1);
     d.setTextColor(acolor, bcolor);
     d.setCursor(w - 116, 34 );
     d.println(ylabel);
-    tft.setRotation(1);
+    tft.setRotation(rotation);
     delay(0);
 }
 
@@ -1795,8 +1811,34 @@ void println_Center( Adafruit_ILI9341 &d, String heading, int centerX, int cente
     uint16_t ww, hh;
 
     d.getTextBounds( string2char(heading), x, y, &x1, &y1, &ww, &hh );
+    Serial.println("println_center");
+    Serial.println(heading);
+    Serial.println(centerX);
+    Serial.println(centerY);
+    Serial.println(x1);
+    Serial.println(y1);
+    Serial.println(ww);
+    Serial.println(hh);
+
+    Serial.println( centerX - ww/2 + 2);
+    Serial.println( centerY - hh / 2);
+
     d.setCursor( centerX - ww/2 + 2, centerY - hh / 2);
-    d.println( heading );   
+    d.println( heading );
+    // d.setCursor( 160 - 216/2 + 2, 160 - 16 / 2);
+    // Serial.println(160 - 216/2 + 2);
+    // Serial.println(160 - 16 / 2);
+    
+    // d.setCursor( 54,152 );
+    // d.println( "Settings Stomped!!" );
+    
+    // d.setCursor( 45,216 );
+    // d.println( "1234567890" );
+    // d.println( "Reflow Master - PCB v2018-2, Code v1.03" );
+}
+
+void setFault(Adafruit_ILI9341 &d){
+  d.setCursor(45,216);
 }
 
 void println_Right( Adafruit_ILI9341 &d, String heading, int centerX, int centerY )
@@ -1855,7 +1897,7 @@ void setup()
   }
 
   // Attatch button IO for OneButton
-  // button0.attachClick(button0Press);
+  button0.attachClick(button0Press);
   // button1.attachClick(button1Press);
   // button2.attachClick(button2Press);
   // button3.attachClick(button3Press);
@@ -1901,6 +1943,7 @@ void loop(){
   //   delay(5000);
   //   Serial.println(micros());
   // }
+  // 
   doLoop();
 }
 
