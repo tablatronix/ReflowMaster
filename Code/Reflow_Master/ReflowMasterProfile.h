@@ -85,10 +85,14 @@ HISTORY:
           reflowTangents[i] = 1;
         else
           reflowTangents[i] = 0;
+
+        delay(0);
        }
 
-       for ( int i = 0; i < ELEMENTS(wantedCurve); i++ )
+       for ( int i = 0; i < ELEMENTS(wantedCurve); i++ ){
           wantedCurve[i] = -1; 
+          delay(0);
+       }
      }
      
      ~ReflowGraph()
@@ -98,9 +102,10 @@ HISTORY:
      float MaxValue()
      {
       float maxV = -1;
-      for( int i = 0; i < len; i++ )
+      for( int i = 0; i < len; i++ ){
           maxV = max( maxV, reflowGraphY[i] );
-
+          delay(0);
+      }
       return maxV;
      }
 
@@ -111,6 +116,8 @@ HISTORY:
       {
         if ( reflowGraphY[i] > 0 )
           minV = min( minV, reflowGraphY[i] );
+
+        delay(0);
       }
 
       return minV;
@@ -122,6 +129,7 @@ HISTORY:
       for( int i = 0; i < len; i++ )
           maxV = max( maxV, reflowGraphX[i] );
 
+      delay(0);
       return maxV;
      }
  };

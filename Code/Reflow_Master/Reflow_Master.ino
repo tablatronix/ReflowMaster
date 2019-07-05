@@ -28,40 +28,55 @@ HISTORY:
 /*
  * NOTE: This is a work in progress...
  */
+#include <ESP8266WiFi.h>
 
 #include <SPI.h>
 #include <spline.h> // http://github.com/kerinin/arduino-splines
 #include "Adafruit_GFX.h" // Library Manager
 #include "Adafruit_ILI9341.h" // Library Manager
 #include "MAX31855.h" // by Rob Tillaart Library Manager
-#include "OneButton.h" // Library Manager
+// #include "OneButton.h" // Library Manager
 #include "ReflowMasterProfile.h" 
-#include <FlashStorage.h> // Library Manager
+// #include <FlashStorage.h> // Library Manager
 
 // used to obtain the size of an array of any type
 #define ELEMENTS(x)   (sizeof(x) / sizeof(x[0]))
 
 // used to show or hide serial debug output
-//#define DEBUG
+#define DEBUG
 
 // TFT SPI pins
-#define TFT_DC 0
-#define TFT_CS 3
-#define TFT_RESET 1
+// #define TFT_DC 0
+// #define TFT_CS 3
+// #define TFT_RESET 1
+
+#define TFT_DC    5 // D1
+#define TFT_CS    4 // D2
+#define TFT_RESET -1
 
 // MAX 31855 Pins
-#define MAXDO   11
-#define MAXCS   10
-#define MAXCLK  12
+// #define MAXDO   14
+// #define MAXCS   13
+// #define MAXCLK  12
+
+#define MAXDO   D3 // 0
+#define MAXCS   D4 // 2
+#define MAXCLK  D0 // 16
+
+// #ifdef ESP8266
+// #define A1 A0
+// #define A2 A0
+// #define A3 A0
+// #endif
 
 #define BUTTON0 A0 // menu buttons
-#define BUTTON1 A1 // menu buttons
-#define BUTTON2 A2 // menu buttons
-#define BUTTON3 A3 // menu buttons
+#define BUTTON1 A0 // menu buttons
+#define BUTTON2 A0 // menu buttons
+#define BUTTON3 A0 // menu buttons
 
-#define BUZZER A4  // buzzer
-#define RELAY 5    // relay control
-#define FAN A5     // fan control
+#define BUZZER 4  // buzzer
+#define FAN    5  // fan control
+#define RELAY  5   // relay control
 
 // Just a bunch of re-defined colours
 #define BLUE      0x001F
@@ -104,8 +119,8 @@ typedef struct {
 const String ver = "1.03";
 bool newSettings = false;
 
-long nextTempRead;
-long nextTempAvgRead;
+unsigned long nextTempRead;
+unsigned long nextTempAvgRead;
 int avgReadCount = 0;
 
 
@@ -157,25 +172,31 @@ int graphRangeStep_Y = 15;
 Spline baseCurve;
 
 // Initialise the TFT screen
-Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RESET);
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC,TFT_RESET);
+
+// Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RESET);
 
 // Initialise the MAX31855 IC for thermocouple tempterature reading
 MAX31855 tc(MAXCLK, MAXCS, MAXDO);
 
 // Initialise the buttons using OneButton library
-OneButton button0(BUTTON0, false);
-OneButton button1(BUTTON1, false);
-OneButton button2(BUTTON2, false);
-OneButton button3(BUTTON3, false);
+// OneButton button0(BUTTON0, false);
+// OneButton button1(BUTTON1, false);
+// OneButton button2(BUTTON2, false);
+// OneButton button3(BUTTON3, false);
 
 // Initiliase a reference for the settings file that we store in flash storage
 Settings set;
 // Initialise flash storage
-FlashStorage(flash_store, Settings);
+// FlashStorage(flash_store, Settings);
 
 // This is where we initialise each of the profiles that will get loaded into the Reflkow Master
 void LoadPaste()
 {
+#ifdef DEBUG
+  Serial.println("Load Paste");
+#endif
+
 /*
   Each profile is initialised with the follow data:
 
@@ -231,353 +252,322 @@ ReflowGraph CurrentGraph()
 // Set the current profile via the array index
 void SetCurrentGraph( int index )
 {
+  #ifdef DEBUG
+  Serial.println("SetCurrentGraph");
+  #endif
   currentGraphIndex = index;
   graphRangeMax_X = CurrentGraph().MaxTime();
   graphRangeMax_Y = CurrentGraph().MaxValue() + 5; // extra padding
   graphRangeMin_Y = CurrentGraph().MinValue();
 
-#ifdef DEBUG
-  Serial.print("Setting Paste: ");
-  Serial.println( CurrentGraph().n );
-  Serial.println( CurrentGraph().t );
-#endif
+// #ifdef DEBUG
+//   Serial.print("Setting Paste: ");
+//   Serial.println( CurrentGraph().n );
+//   Serial.println( CurrentGraph().t );
+// #endif
 
   // Initialise the spline for the profile to allow for smooth graph display on UI
   timeX = 0;
-  baseCurve.setPoints(CurrentGraph().reflowGraphX, CurrentGraph().reflowGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
-  baseCurve.setDegree( Hermite );
+  // Serial.println(CurrentGraph().reflowGraphX,2);
+  // Serial.println();
+  // Serial.print(CurrentGraph().reflowGraphY,4);
+  // Serial.println();
+  // Serial.print(CurrentGraph().reflowTangents,4);
+  // Serial.println();
+  // Serial.print(CurrentGraph().len,4);
+  // Serial.println();
+  // baseCurve.setPoints(CurrentGraph().reflowGraphX, CurrentGraph().reflowGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
+  // baseCurve.setDegree( Hermite );
+  double x[7] = {-1,0,1,2,3,4, 5};
+  double y[7] = { 0,0,8,5,2,10,10};
+  baseCurve.setPoints(x,y,7);
 
-  // Re-interpolate data based on spline
-  for( int ii = 0; ii <= graphRangeMax_X; ii+= 1 )
-  {
-    solderPaste[ currentGraphIndex ].wantedCurve[ii] = baseCurve.value(ii);
-  }
+  // // Re-interpolate data based on spline
+  // for( int ii = 0; ii <= graphRangeMax_X; ii+= 1 )
+  // {
+  //   // solderPaste[ currentGraphIndex ].wantedCurve[ii] = baseCurve.value(ii);
+  //   delay(0);
+  // }
 
   // calculate the biggest graph movement delta
   float lastWanted = -1;
-  for ( int i = 0; i < solderPaste[ currentGraphIndex ].offTime; i++ )
-  {
-      float wantedTemp = solderPaste[ currentGraphIndex ].wantedCurve[ i ];
+  // for ( int i = 0; i < solderPaste[ currentGraphIndex ].offTime; i++ )
+  // {
+  //     float wantedTemp = solderPaste[ currentGraphIndex ].wantedCurve[ i ];
 
-      if ( lastWanted > -1 )
-      {
-        float wantedDiff = (wantedTemp - lastWanted );
+  //     if ( lastWanted > -1 )
+  //     {
+  //       float wantedDiff = (wantedTemp - lastWanted );
   
-        if ( wantedDiff > solderPaste[ currentGraphIndex ].maxWantedDelta )
-          solderPaste[ currentGraphIndex ].maxWantedDelta = wantedDiff;
-      }
-      lastWanted  = wantedTemp;
-  }
+  //       if ( wantedDiff > solderPaste[ currentGraphIndex ].maxWantedDelta ){
+  //         solderPaste[ currentGraphIndex ].maxWantedDelta = wantedDiff;
+  //       }
+  //     }
+  //     lastWanted  = wantedTemp;
+  //     delay(0);   
+  // }
 }
 
-void setup()
-{
-  // Setup all GPIO
-  pinMode( BUZZER, OUTPUT );
-  pinMode( RELAY, OUTPUT );
-  pinMode( FAN, OUTPUT );
-  
-  pinMode( BUTTON0, INPUT );
-  pinMode( BUTTON1, INPUT );
-  pinMode( BUTTON2, INPUT );
-  pinMode( BUTTON3, INPUT );
-
-  // Turn off the SSR - duty cycle of 0
-  SetRelayFrequency( 0 );
-
-#ifdef DEBUG
-  Serial.begin(115200);
-#endif
-
-  // just wait a bit before we try to load settings from FLASH
-  delay(500);
-
-  // load settings from FLASH
-  set = flash_store.read();
-
-  // If no settings were loaded, initialise data and save
-  if ( !set.valid )
-  {
-    SetDefaults();
-    newSettings = true;
-    flash_store.write(set);
-  }
-
-  // Attatch button IO for OneButton
-  button0.attachClick(button0Press);
-  button1.attachClick(button1Press);
-  button2.attachClick(button2Press);
-  button3.attachClick(button3Press);
-
-#ifdef DEBUG
-  Serial.println("TFT Begin...");
-#endif
-
-  // Start up the TFT and show the boot screen
-  tft.begin();
-  BootScreen();
-
-  delay(500);
-
-// Start up the MAX31855
-#ifdef DEBUG
-  Serial.println("Thermocouple Begin...");
-#endif
-  tc.begin();
-
-  // delay for initial temp probe read to be garbage
-  delay(500);
-
-  // Load up the profiles
-  LoadPaste();
-  // Set the current profile based on last selected
-  SetCurrentGraph( set.paste );
-
-  delay(500);
-
-  // Show the main menu
-  ShowMenu();
-}
-
-
-void loop()
+void doloop()
 {
   // Used by OneButton to poll for button inputs
-  button0.tick();
-  button1.tick();
-  button2.tick();
-  button3.tick();
+  // button0.tick();
+  // button1.tick();
+  // button2.tick();
+  // button3.tick();
+  // Serial.println(state);
+  // Serial.println(ESP.getFreeHeap());
+  // Serial.println(ESP.getHeapFragmentation());
+  // Serial.println(ESP.getMaxFreeBlockSize());
+  delay(500);
+  Serial.println(millis());
 
   // Current activity state machine
   if ( state == 0 ) // BOOT
   {
-    return;
+    // Load up the profiles
+    LoadPaste();
+    // Set the current profile based on last selected
+    SetCurrentGraph( set.paste ); // this causes the bug, 
+    delay(5000);
+    // Show the main menu
+    ShowMenu();
+    // ShowMenuOptions( true );
+    Serial.println("back in loop");
   }
-  else if ( state == 1 ) // WARMUP - We sit here until the probe reaches the starting temp for the profile
-  {
-    if ( nextTempRead < millis() ) // we only read the probe every second
-    {
-      nextTempRead = millis() + 1000;
-  
-      ReadCurrentTemp();
-      MatchTemp();
+ }
 
-      if ( currentTemp >= GetGraphValue(0) )
-      {
-        // We have reached the starting temp for the profile, so lets start baking our boards!
-        lastTemp = currentTemp;
-        avgReadCount = 0;
-        currentTempAvg = 0;
+//   else if ( state == 1 ) // WARMUP - We sit here until the probe reaches the starting temp for the profile
+//   {
+//     Serial.println("warmup");
+//     if ( nextTempRead < millis() ) // we only read the probe every second
+//     {
+//       nextTempRead = millis() + 1000;
+  
+//       ReadCurrentTemp();
+//       MatchTemp();
+
+//       if ( currentTemp >= GetGraphValue(0) )
+//       {
+//         // We have reached the starting temp for the profile, so lets start baking our boards!
+//         lastTemp = currentTemp;
+//         avgReadCount = 0;
+//         currentTempAvg = 0;
         
-        StartReflow();
-      }
-      else if ( currentTemp > 0 )
-      {
-        // Show the current probe temp so we can watch as it reaches the minimum starting value
-        tft.setTextColor( YELLOW, BLACK );
-        tft.setTextSize(5);
-        println_Center( tft, "  "+String( round( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
-      }
-    }
-    return;
-  }
-  else if ( state == 3 ) // FINISHED
-  {
-    // Currently not used
-    return;
-  }
-  else if ( state == 11 || state == 12 || state == 13 ) // SETTINGS
-  {
-    // Currently not used
-    return;
-  }
-  else if ( state == 10 ) // MENU
-  {
-    if ( nextTempRead < millis() )
-    {
-      nextTempRead = millis() + 1000;
+//         StartReflow();
+//       }
+//       else if ( currentTemp > 0 )
+//       {
+//         // Show the current probe temp so we can watch as it reaches the minimum starting value
+//         tft.setTextColor( YELLOW, BLACK );
+//         tft.setTextSize(5);
+//         println_Center( tft, "  "+String( round( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+//       }
+//     }
+//     return;
+//   }
+//   else if ( state == 3 ) // FINISHED
+//   {
+//     // Currently not used
+//     return;
+//   }
+//   else if ( state == 11 || state == 12 || state == 13 ) // SETTINGS
+//   {
+//     // Currently not used
+//     return;
+//   }
+//   else if ( state == 10 ) // MENU
+//   {
+//     Serial.println("loop menu");
+//     if ( nextTempRead < millis() )
+//     {
+//       nextTempRead = millis() + 1000;
 
-      // We show the current probe temp in the men screen just for info
-      ReadCurrentTemp();
+//       // We show the current probe temp in the men screen just for info
+//       ReadCurrentTemp();
 
-      if ( currentTemp > 0 )
-      {
-        tft.setTextColor( YELLOW, BLACK );
-        tft.setTextSize(5);
-        int third = tft.width()/4;
-        println_Center( tft, "  "+String( round( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
-      }
-    }
-    return;
-  }
-  else if ( state == 15 )
-  {
-    // Currently not used
-    return;
-  }
-  else if ( state == 16 ) // calibration - not currently used
-  {
-    if ( nextTempRead < millis() )
-    {
-      nextTempRead = millis() + 1000;
+//       if ( currentTemp > 0 )
+//       {
+//         tft.setTextColor( YELLOW, BLACK );
+//         tft.setTextSize(5);
+//         int third = tft.width()/4;
+//         println_Center( tft, "  "+String( round( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+//       }
+//     }
+//     delay(100);
+//     return;
+//   }
+//   else if ( state == 15 )
+//   {
+//     // Currently not used
+//     return;
+//   }
+//   else if ( state == 16 ) // calibration - not currently used
+//   {
+//     if ( nextTempRead < millis() )
+//     {
+//       nextTempRead = millis() + 1000;
   
-      ReadCurrentTemp();
+//       ReadCurrentTemp();
 
-      MatchCalibrationTemp();
+//       MatchCalibrationTemp();
   
-      if ( calibrationState < 2 )
-      {
-        tft.setTextColor( CYAN, BLACK );
-        tft.setTextSize(2);
+//       if ( calibrationState < 2 )
+//       {
+//         tft.setTextColor( CYAN, BLACK );
+//         tft.setTextSize(2);
 
-        if ( calibrationState == 0 )
-        {
-          if ( currentTemp < GetGraphValue(0) )
-            println_Center( tft, "WARMING UP", tft.width() / 2, ( tft.height() / 2 ) - 15 );
-          else
-            println_Center( tft, "HEAT UP SPEED", tft.width() / 2, ( tft.height() / 2 ) - 15 );
+//         if ( calibrationState == 0 )
+//         {
+//           if ( currentTemp < GetGraphValue(0) )
+//             println_Center( tft, "WARMING UP", tft.width() / 2, ( tft.height() / 2 ) - 15 );
+//           else
+//             println_Center( tft, "HEAT UP SPEED", tft.width() / 2, ( tft.height() / 2 ) - 15 );
             
-          println_Center( tft, "TARGET "+String( GetGraphValue(1) )+"c in " + String( GetGraphTime(1) ) +"s", tft.width() / 2, ( tft.height() -18 ) );
-        }
-        else if ( calibrationState == 1 )
-        {
-          println_Center( tft, "COOL DOWN LEVEL", tft.width() / 2, ( tft.height() / 2 ) - 15 );
-          tft.fillRect( 0, tft.height()-30, tft.width(), 30, BLACK );
-        }
+//           println_Center( tft, "TARGET "+String( GetGraphValue(1) )+"c in " + String( GetGraphTime(1) ) +"s", tft.width() / 2, ( tft.height() -18 ) );
+//         }
+//         else if ( calibrationState == 1 )
+//         {
+//           println_Center( tft, "COOL DOWN LEVEL", tft.width() / 2, ( tft.height() / 2 ) - 15 );
+//           tft.fillRect( 0, tft.height()-30, tft.width(), 30, BLACK );
+//         }
 
 
-        // only show the timer when we have hit the profile starting temp
-        if (currentTemp >= GetGraphValue(0) )
-        {
-          // adjust the timer colour based on good or bad values
-          if ( calibrationState == 0 )
-          {
-            if ( calibrationSeconds <= GetGraphTime(1) )
-              tft.setTextColor( WHITE, BLACK );
-            else
-              tft.setTextColor( ORANGE, BLACK );
-          }
-          else
-          {
-            tft.setTextColor( WHITE, BLACK );
-          }
+//         // only show the timer when we have hit the profile starting temp
+//         if (currentTemp >= GetGraphValue(0) )
+//         {
+//           // adjust the timer colour based on good or bad values
+//           if ( calibrationState == 0 )
+//           {
+//             if ( calibrationSeconds <= GetGraphTime(1) )
+//               tft.setTextColor( WHITE, BLACK );
+//             else
+//               tft.setTextColor( ORANGE, BLACK );
+//           }
+//           else
+//           {
+//             tft.setTextColor( WHITE, BLACK );
+//           }
           
-          tft.setTextSize(4);
-          println_Center( tft, " "+String( calibrationSeconds )+" secs ", tft.width() / 2, ( tft.height() / 2 ) +20 );
-        }
-        tft.setTextSize(5);
-        tft.setTextColor( YELLOW, BLACK );
-        println_Center( tft, " "+String( round( currentTemp ) )+"c ", tft.width() / 2, ( tft.height() / 2 ) + 65 );
+//           tft.setTextSize(4);
+//           println_Center( tft, " "+String( calibrationSeconds )+" secs ", tft.width() / 2, ( tft.height() / 2 ) +20 );
+//         }
+//         tft.setTextSize(5);
+//         tft.setTextColor( YELLOW, BLACK );
+//         println_Center( tft, " "+String( round( currentTemp ) )+"c ", tft.width() / 2, ( tft.height() / 2 ) + 65 );
 
         
-      }
-      else if ( calibrationState == 2 )
-      {
-        calibrationState = 3;
+//       }
+//       else if ( calibrationState == 2 )
+//       {
+//         calibrationState = 3;
         
-        tft.setTextColor( GREEN, BLACK );
-        tft.setTextSize(2);
-        tft.fillRect( 0, (tft.height() / 2 ) - 45, tft.width(), (tft.height() / 2 ) + 45, BLACK );
-        println_Center( tft, "RESULTS!", tft.width() / 2, ( tft.height() / 2 ) - 45 );
+//         tft.setTextColor( GREEN, BLACK );
+//         tft.setTextSize(2);
+//         tft.fillRect( 0, (tft.height() / 2 ) - 45, tft.width(), (tft.height() / 2 ) + 45, BLACK );
+//         println_Center( tft, "RESULTS!", tft.width() / 2, ( tft.height() / 2 ) - 45 );
 
-        tft.setTextColor( WHITE, BLACK );
-        tft.setCursor( 20, ( tft.height() / 2 ) - 10 );
-        tft.print( "RISE " );
-        if ( calibrationUpMatch )
-        {
-          tft.setTextColor( GREEN, BLACK );
-          tft.print( "PASS" );
-        }
-        else
-        {
-          tft.setTextColor( ORANGE, BLACK );
-          tft.print( "FAIL " );
-          tft.setTextColor( WHITE, BLACK );
-          tft.print( "REACHED " + String( round(calibrationRiseVal * 100) ) +"%") ;
-        }
+//         tft.setTextColor( WHITE, BLACK );
+//         tft.setCursor( 20, ( tft.height() / 2 ) - 10 );
+//         tft.print( "RISE " );
+//         if ( calibrationUpMatch )
+//         {
+//           tft.setTextColor( GREEN, BLACK );
+//           tft.print( "PASS" );
+//         }
+//         else
+//         {
+//           tft.setTextColor( ORANGE, BLACK );
+//           tft.print( "FAIL " );
+//           tft.setTextColor( WHITE, BLACK );
+//           tft.print( "REACHED " + String( round(calibrationRiseVal * 100) ) +"%") ;
+//         }
 
-        tft.setTextColor( WHITE, BLACK );
-        tft.setCursor( 20, ( tft.height() / 2 ) + 20 );
-        tft.print( "DROP " );
-        if ( calibrationDownMatch )
-        {
-          tft.setTextColor( GREEN, BLACK );
-          tft.print( "PASS" );
-          tft.setTextColor( WHITE, BLACK );
-          tft.print( "DROPPED " + String( round(calibrationDropVal * 100) ) +"%") ;
-        }
-        else
-        {
-          tft.setTextColor( ORANGE, BLACK );
-          tft.print( "FAIL " );
-          tft.setTextColor( WHITE, BLACK );
-          tft.print( "DROPPED " + String( round(calibrationDropVal * 100) ) +"%") ;
+//         tft.setTextColor( WHITE, BLACK );
+//         tft.setCursor( 20, ( tft.height() / 2 ) + 20 );
+//         tft.print( "DROP " );
+//         if ( calibrationDownMatch )
+//         {
+//           tft.setTextColor( GREEN, BLACK );
+//           tft.print( "PASS" );
+//           tft.setTextColor( WHITE, BLACK );
+//           tft.print( "DROPPED " + String( round(calibrationDropVal * 100) ) +"%") ;
+//         }
+//         else
+//         {
+//           tft.setTextColor( ORANGE, BLACK );
+//           tft.print( "FAIL " );
+//           tft.setTextColor( WHITE, BLACK );
+//           tft.print( "DROPPED " + String( round(calibrationDropVal * 100) ) +"%") ;
 
-          tft.setTextColor( WHITE, BLACK );
-          tft.setCursor( 20, ( tft.height() / 2 ) + 40 );
-          tft.print( "RECOMMEND ADDING FAN") ;
-        }
-      }
-    }
-  }
-  else // state is 2 - REFLOW
-  {
-    if ( nextTempAvgRead < millis() )
-    {
-      nextTempAvgRead = millis() + 100;
-      ReadCurrentTempAvg();
-    }
-    if ( nextTempRead < millis() )
-    {
-      nextTempRead = millis() + 1000;
+//           tft.setTextColor( WHITE, BLACK );
+//           tft.setCursor( 20, ( tft.height() / 2 ) + 40 );
+//           tft.print( "RECOMMEND ADDING FAN") ;
+//         }
+//       }
+//     }
+//   }
+//   else // state is 2 - REFLOW
+//   {
+//     if ( nextTempAvgRead < millis() )
+//     {
+//       nextTempAvgRead = millis() + 100;
+//       ReadCurrentTempAvg();
+//     }
+//     if ( nextTempRead < millis() )
+//     {
+//       nextTempRead = millis() + 1000;
 
-      // Set the temp from the average
-      currentTemp = ( currentTempAvg / avgReadCount );
-      // clear the variables for next run
-      avgReadCount = 0;
-      currentTempAvg = 0;
+//       // Set the temp from the average
+//       currentTemp = ( currentTempAvg / avgReadCount );
+//       // clear the variables for next run
+//       avgReadCount = 0;
+//       currentTempAvg = 0;
 
-      // Control the SSR
-      MatchTemp();
+//       // Control the SSR
+//       MatchTemp();
 
-      if ( currentTemp > 0 )
-      {
-        timeX++;
+//       if ( currentTemp > 0 )
+//       {
+//         timeX++;
 
-        if ( timeX > CurrentGraph().completeTime )
-        {
-          EndReflow();
-        }
-        else 
-        {
-          Graph(tft, timeX, currentTemp, 30, 220, 270, 180 );
+//         if ( timeX > CurrentGraph().completeTime )
+//         {
+//           EndReflow();
+//         }
+//         else 
+//         {
+//           Graph(tft, timeX, currentTemp, 30, 220, 270, 180 );
 
-          if ( timeX < CurrentGraph().fanTime )
-          {
-            float wantedTemp = CurrentGraph().wantedCurve[ (int)timeX ];
-            DrawHeading( String( round( currentTemp ) ) + "/" + String( (int)wantedTemp )+"c", currentPlotColor, BLACK );
+//           if ( timeX < CurrentGraph().fanTime )
+//           {
+//             float wantedTemp = CurrentGraph().wantedCurve[ (int)timeX ];
+//             DrawHeading( String( round( currentTemp ) ) + "/" + String( (int)wantedTemp )+"c", currentPlotColor, BLACK );
 
-#ifdef DEBUG
-            tft.setCursor( 60, 40 );
-            tft.setTextSize(2);
-            tft.fillRect( 60, 40, 80, 20, BLACK );
-            tft.println( String( round((currentDuty/256) * 100 )) +"%" );
-#endif
-          }
-        }
-      }
-    }
-  }
-}
+// #ifdef DEBUG
+//             tft.setCursor( 60, 40 );
+//             tft.setTextSize(2);
+//             tft.fillRect( 60, 40, 80, 20, BLACK );
+//             tft.println( String( round((currentDuty/256) * 100 )) +"%" );
+// #endif
+//           }
+//         }
+//       }
+//     }
+//   }
+// }
 
 // This is where the SSR is controlled via PWM
 void SetRelayFrequency( int duty )
 {
+  #ifdef DEBUG
+  Serial.println("SetRelayFrequency");
+  #endif
   // calculate the wanted duty based on settings power override
   currentDuty = ((float)duty * set.power );
 
   // Write the clamped duty cycle to the RELAY GPIO
-  analogWrite( RELAY, constrain( round( currentDuty ), 0, 255) );
+  // analogWrite( RELAY, constrain( round( currentDuty ), 0, 255) );
 
 #ifdef DEBUG
   Serial.print("RELAY Duty Cycle: ");
@@ -671,8 +661,8 @@ void ReadCurrentTemp()
   Serial.print(" status: ");
   Serial.println( status );
   #endif
-  float internal = tc.getInternal();
-  currentTemp = tc.getTemperature() + set.tempOffset;
+  // float internal = tc.getInternal();
+  // currentTemp = tc.getTemperature() + set.tempOffset;
 }
 
 // This is where the magic happens for temperature matching
@@ -816,7 +806,7 @@ void StartFan ( bool start )
   
   if ( set.useFan )
   {
-    digitalWrite ( FAN, ( start ? HIGH : LOW ) );
+    // digitalWrite ( FAN, ( start ? HIGH : LOW ) );
   }
 }
 
@@ -847,6 +837,7 @@ void DrawBaseGraph()
   for( int ii = 0; ii <= graphRangeMax_X; ii+= 5 )
   {
     GraphDefault(tft, ii, CurrentGraph().wantedCurve[ii], 30, 220, 270, 180, PINK );
+    delay(0);
   }
 
   ox = 30;
@@ -856,7 +847,7 @@ void DrawBaseGraph()
 
 void BootScreen()
 {
-  tft.setRotation(1);
+  tft.setRotation(3);
   tft.fillScreen(BLACK);
 
   tft.setTextColor( GREEN, BLACK );
@@ -874,35 +865,48 @@ void BootScreen()
 
 void ShowMenu()
 {
-  state = 10;
-  SetRelayFrequency( 0 );
+  // #ifdef DEBUG
+  // Serial.println("ShowMenu");
+  // #endif
 
-  set = flash_store.read();
-    
-  tft.fillScreen(BLACK);
+  // state = 10;
+  // // SetRelayFrequency( 0 );
 
-  tft.setTextColor( WHITE, BLACK );
-  tft.setTextSize(2);
-  tft.setCursor( 20, 20 );
-  tft.println( "CURRENT PASTE" );
+  // // set = flash_store.read();
+  // #ifdef DEBUG
+  //   Serial.println("TFT Show Menu");
+  // #endif  
+  // // tft.fillScreen(ILI9341_BLACK);
+  // // tft.fillScreen(ILI9341_BLACK);
+  // Serial.println("clear display");
+  
+  // // tft.setTextColor( WHITE, BLACK );
+  // // tft.setTextSize(2);
+  // // tft.setCursor( 20, 20 );
+  // // tft.println( "CURRENT PASTE" );
+  // Serial.println("disp curr paste");
+  // delay(1000);
 
-  tft.setTextColor( YELLOW, BLACK );
-  tft.setCursor( 20, 40 ); 
-  tft.println( CurrentGraph().n );
-  tft.setCursor( 20, 60 );
-  tft.println( String(CurrentGraph().tempDeg) +"deg");
+  // // tft.setTextColor( YELLOW, BLACK );
+  // // tft.setCursor( 20, 40 ); 
+  // // tft.println( CurrentGraph().n );
+  // // tft.setCursor( 20, 60 );
+  // // tft.println( String(CurrentGraph().tempDeg) +"deg");
+  // Serial.println("disp temperature");
 
-  if ( newSettings )
-  {
-    tft.setTextColor( CYAN, BLACK );
-    println_Center( tft, "Settings Stomped!!", tft.width() / 2, tft.height() - 80 );
-  }
+  // if ( newSettings )
+  // {
+  //   // tft.setTextColor( CYAN, BLACK );
+  //   // println_Center( tft, "Settings Stomped!!", tft.width() / 2, tft.height() - 80 );
+  // }
 
-  tft.setTextSize(1);
-  tft.setTextColor( WHITE, BLACK );
-  println_Center( tft, "Reflow Master - PCB v2018-2, Code v" + ver, tft.width() / 2, tft.height() - 20 );
+  // // tft.setTextSize(1);
+  // // tft.setTextColor( WHITE, BLACK );
+  // // println_Center( tft, "Reflow Master - PCB v2018-2, Code v" + ver, tft.width() / 2, tft.height() - 20 );
 
-  ShowMenuOptions( true );
+  // delay(5000);
+  // // ShowMenuOptions( true );
+  Serial.println("showmenu done");
 }
 
 void ShowSettings()
@@ -994,6 +998,7 @@ void ShowPaste()
       tft.setTextColor( GREY, BLACK );
       
       y+= 40;
+      delay(0);
   }
 
    ShowMenuOptions( true );
@@ -1001,6 +1006,9 @@ void ShowPaste()
 
 void ShowMenuOptions( bool clearAll )
 {
+    #ifdef DEBUG
+    Serial.println("ShowMenuOptions");
+    #endif  
   int buttonPosY[] = { 19, 74, 129, 184 };
   int buttonHeight = 16;
   int buttonWidth = 4;
@@ -1013,6 +1021,7 @@ void ShowMenuOptions( bool clearAll )
     // Clear All
     for ( int i = 0; i < 4; i++ )
       tft.fillRect( tft.width()-100,  buttonPosY[i]-2, 100, buttonHeight+4, BLACK );
+      delay(0);
   }
   
   if ( state == 10 )
@@ -1028,6 +1037,7 @@ void ShowMenuOptions( bool clearAll )
     // button 3
     tft.fillRect( tft.width()-5,  buttonPosY[3], buttonWidth, buttonHeight, YELLOW );
     println_Right( tft, "OVEN CHECK", tft.width()- 27, buttonPosY[3] + 8 );
+    return;
   }
   else if ( state == 11 )
   {
@@ -1265,7 +1275,7 @@ void ResetSettingsToDefault()
 {
   // set default values again and save
   SetDefaults();
-  flash_store.write(set);
+  // flash_store.write(set);
 
   // load the default paste
   SetCurrentGraph( set.paste );
@@ -1588,7 +1598,7 @@ void button1Press()
     else if ( state == 11 ) // leaving settings so save
     {
       // save data in flash
-      flash_store.write(set);
+      // flash_store.write(set);
       ShowMenu();
     }
     else if ( state == 12 || state == 13 )
@@ -1682,6 +1692,7 @@ void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, d
       d.setTextColor(tcolor, bcolor);
       d.setCursor(gx-25, temp);
       println_Right( d, String(round(i)), gx-25, temp );
+      delay(0);
     }
     
     // draw x scale
@@ -1705,6 +1716,8 @@ void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, d
         println_Center(d, String(round(i)), temp, gy + 10 );
       else
         println_Center(d, String(round(xhi)), temp, gy + 10 );
+        
+      delay(0);
     }
 
     //now draw the labels
@@ -1724,6 +1737,7 @@ void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, d
     d.setCursor(w - 116, 34 );
     d.println(ylabel);
     tft.setRotation(1);
+    delay(0);
 }
 
 void Graph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, double w, double h )
@@ -1735,7 +1749,7 @@ void Graph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, double
   if ( timeX < 2 )
     oy = min( oy, y );
     
-  y = min( y, 220 ); // bottom of graph!
+  y = min( (int)y, 220 ); // bottom of graph!
 
 //  d.fillRect( ox-1, oy-1, 3, 3, currentPlotColor );
 
@@ -1767,6 +1781,7 @@ char* string2char(String command)
         char *p = const_cast<char*>(command.c_str());
         return p;
     }
+    return 0;
 }
 
 void println_Center( Adafruit_ILI9341 &d, String heading, int centerX, int centerY )
@@ -1793,5 +1808,95 @@ void println_Right( Adafruit_ILI9341 &d, String heading, int centerX, int center
     d.println( heading );
 }
 
+
+
+void setup()
+{
+  // Setup all GPIO
+  // pinMode( BUZZER, OUTPUT );
+  // pinMode( RELAY, OUTPUT );
+  // pinMode( FAN, OUTPUT );
+  
+  // pinMode( BUTTON0, INPUT );
+  // pinMode( BUTTON1, INPUT );
+  // pinMode( BUTTON2, INPUT );
+  // pinMode( BUTTON3, INPUT );
+
+  // Turn off the SSR - duty cycle of 0
+  // SetRelayFrequency( 0 );
+
+// #ifdef DEBUG
+  Serial.begin(115200);
+  Serial.setDebugOutput(true);
+// #endif
+
+  WiFi.mode(WIFI_OFF);
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+
+  Serial.println(ESP.getFreeHeap());
+  Serial.println(ESP.getHeapFragmentation());
+  Serial.println(ESP.getMaxFreeBlockSize());
+
+  // just wait a bit before we try to load settings from FLASH
+  delay(500);
+
+  // load settings from FLASH
+  // set = flash_store.read();
+
+  // If no settings were loaded, initialise data and save
+  if ( !set.valid )
+  {
+    SetDefaults();
+    newSettings = true;
+    // flash_store.write(set);
+  }
+
+  // Attatch button IO for OneButton
+  // button0.attachClick(button0Press);
+  // button1.attachClick(button1Press);
+  // button2.attachClick(button2Press);
+  // button3.attachClick(button3Press);
+
+#ifdef DEBUG
+  Serial.println("TFT Begin...");
+#endif
+
+  // Start up the TFT and show the boot screen
+  tft.begin();
+  delay(300);
+  BootScreen();
+
+#ifdef DEBUG
+  Serial.println("Booted Spash Screen");
+#endif
+
+  delay(500);
+
+// Start up the MAX31855
+// @todo sanity
+tc.begin();
+tc.read();
+#ifdef DEBUG
+  Serial.println("Thermocouple Begin...");
+  Serial.println((String)round(tc.getInternal()));
+  Serial.println((String)round(tc.getTemperature()));
+#endif
+
+  // delay for initial temp probe read to be garbage
+  delay(500);
+  state = 0;
+}
+
+
+void loop(){
+  Serial.println("loop");
+  for(int i=0;i<10;i++){
+    // doloop();
+    SetCurrentGraph( set.paste ); // this causes the bug, 
+
+    delay(5000);
+    Serial.println(micros());
+  }
+}
 
 
