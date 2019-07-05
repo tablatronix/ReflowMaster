@@ -50,6 +50,7 @@ HISTORY:
 // #define TFT_CS 3
 // #define TFT_RESET 1
 
+// @TODO use CS and get tft and max31855 working with hspi pins
 #define TFT_DC    15 // D1
 #define TFT_CS    -1 // D2
 #define TFT_RESET -1
@@ -244,7 +245,7 @@ int GetGraphTime( int x )
 }
 
 // Obtain the current profile
-ReflowGraph CurrentGraph()
+ReflowGraph& CurrentGraph()
 {
   return solderPaste[ currentGraphIndex ];
 }
@@ -277,7 +278,8 @@ void SetCurrentGraph( int index )
   // Serial.println();
   // Serial.print(CurrentGraph().len,4);
   // Serial.println();
-  baseCurve.setPoints(solderPaste[ currentGraphIndex ].reflowGraphX, solderPaste[ currentGraphIndex ].reflowGraphY, solderPaste[ currentGraphIndex ].reflowTangents, solderPaste[ currentGraphIndex ].len);
+  // baseCurve.setPoints(solderPaste[ currentGraphIndex ].reflowGraphX, solderPaste[ currentGraphIndex ].reflowGraphY, solderPaste[ currentGraphIndex ].reflowTangents, solderPaste[ currentGraphIndex ].len);
+  baseCurve.setPoints(CurrentGraph().reflowGraphX, CurrentGraph().reflowGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
   // baseCurve.setDegree( Hermite );
   // double x[7] = {-1,0,1,2,3,4, 5};
   // double y[7] = { 0,0,8,5,2,10,10};
@@ -293,7 +295,6 @@ void SetCurrentGraph( int index )
   //   // solderPaste[ currentGraphIndex ].wantedCurve[ii] = baseCurve.value(ii);
   //   delay(0);
   // }
-
   // calculate the biggest graph movement delta
   float lastWanted = -1;
   // for ( int i = 0; i < solderPaste[ currentGraphIndex ].offTime; i++ )
@@ -334,10 +335,9 @@ void doLoop()
     LoadPaste();
     // Set the current profile based on last selected
     SetCurrentGraph( set.paste ); // this causes the bug, 
-    delay(5000);
+    delay(1000);
     // Show the main menu
     ShowMenu();
-    ShowMenuOptions( true );
     Serial.println("back in loop");
   }
   else if ( state == 1 ) // WARMUP - We sit here until the probe reaches the starting temp for the profile
@@ -888,7 +888,7 @@ void ShowMenu()
   tft.setCursor( 20, 20 );
   tft.println( "CURRENT PASTE" );
   Serial.println("disp curr paste");
-  delay(1000);
+  // delay(1000);
 
   tft.setTextColor( YELLOW, BLACK );
   tft.setCursor( 20, 40 ); 
@@ -907,8 +907,8 @@ void ShowMenu()
   tft.setTextColor( WHITE, BLACK );
   println_Center( tft, "Reflow Master - PCB v2018-2, Code v" + ver, tft.width() / 2, tft.height() - 20 );
 
-  delay(5000);
-  // ShowMenuOptions( true );
+  // delay(5000);
+  ShowMenuOptions( true );
   Serial.println("showmenu done");
 }
 
