@@ -260,11 +260,12 @@ void SetCurrentGraph( int index )
   graphRangeMax_Y = CurrentGraph().MaxValue() + 5; // extra padding
   graphRangeMin_Y = CurrentGraph().MinValue();
 
-// #ifdef DEBUG
-//   Serial.print("Setting Paste: ");
-//   Serial.println( CurrentGraph().n );
-//   Serial.println( CurrentGraph().t );
-// #endif
+#ifdef DEBUG
+  Serial.print("Setting Paste: ");
+  Serial.println( currentGraphIndex );
+  Serial.println( CurrentGraph().n );
+  Serial.println( CurrentGraph().t );
+#endif
 
   // Initialise the spline for the profile to allow for smooth graph display on UI
   timeX = 0;
@@ -276,11 +277,15 @@ void SetCurrentGraph( int index )
   // Serial.println();
   // Serial.print(CurrentGraph().len,4);
   // Serial.println();
-  // baseCurve.setPoints(CurrentGraph().reflowGraphX, CurrentGraph().reflowGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
+  baseCurve.setPoints(solderPaste[ currentGraphIndex ].reflowGraphX, solderPaste[ currentGraphIndex ].reflowGraphY, solderPaste[ currentGraphIndex ].reflowTangents, solderPaste[ currentGraphIndex ].len);
   // baseCurve.setDegree( Hermite );
-  double x[7] = {-1,0,1,2,3,4, 5};
-  double y[7] = { 0,0,8,5,2,10,10};
-  baseCurve.setPoints(x,y,7);
+  // double x[7] = {-1,0,1,2,3,4, 5};
+  // double y[7] = { 0,0,8,5,2,10,10};
+  // baseCurve.setPoints(x,y,7);
+
+  float baseGraphX[7] = { 1, 90, 180, 210, 240, 270, 300 }; // time
+  float baseGraphY[7] = { 27, 90, 130, 138, 165, 138, 27 }; // value
+  // baseCurve.setPoints(baseGraphX, baseGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
 
   // // Re-interpolate data based on spline
   // for( int ii = 0; ii <= graphRangeMax_X; ii+= 1 )
@@ -1892,6 +1897,7 @@ void loop(){
   Serial.println("loop");
   for(int i=0;i<10;i++){
     // doloop();
+    LoadPaste();
     SetCurrentGraph( set.paste ); // this causes the bug, 
 
     delay(5000);
