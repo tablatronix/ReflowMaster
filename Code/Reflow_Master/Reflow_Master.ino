@@ -334,12 +334,11 @@ void doLoop()
   // button1.tick();
   // button2.tick();
   // button3.tick();
-  Serial.println(state);
+  // Serial.println(state);
   // Serial.println(ESP.getFreeHeap());
   // Serial.println(ESP.getHeapFragmentation());
   // Serial.println(ESP.getMaxFreeBlockSize());
-  delay(500);
-  Serial.println(millis());
+  // Serial.println(millis());
 
   // Current activity state machine
   if ( state == 0 ) // BOOT
@@ -350,9 +349,8 @@ void doLoop()
     SetCurrentGraph( set.paste ); // this causes the bug, 
     // Show the main menu
     ShowMenu();
-    ShowMenuOptions(true);
-    tc.read();
 
+    tc.read();
     if(tc.getStatus() != STATUS_OK){
       tft.fillScreen(RED);
       tft.setTextColor(WHITE);
@@ -366,7 +364,7 @@ void doLoop()
   }
   else if ( state == 1 ) // WARMUP - We sit here until the probe reaches the starting temp for the profile
   {
-    Serial.println("warmup");
+    // Serial.println("warmup");
     if ( nextTempRead < millis() ) // we only read the probe every second
     {
       nextTempRead = millis() + 1000;
@@ -405,14 +403,14 @@ void doLoop()
   }
   else if ( state == 10 ) // MENU
   {
-    Serial.println("loop menu");
+    // Serial.println("loop menu");
     if ( nextTempRead < millis() )
     {
       nextTempRead = millis() + 1000;
 
       // We show the current probe temp in the men screen just for info
       ReadCurrentTemp();
-      Serial.println((String)currentTemp);
+      // Serial.println((String)currentTemp);
       if ( currentTemp > 0 )
       {
         tft.setTextColor( YELLOW, BLACK );
@@ -592,13 +590,15 @@ void SetRelayFrequency( int duty )
   #endif
   // calculate the wanted duty based on settings power override
   currentDuty = ((float)duty * set.power );
+  currentDuty = constrain( round_f( currentDuty ), 0, 255);
+  // currentDuty = 255-currentDuty; // invert
 
   // Write the clamped duty cycle to the RELAY GPIO
-  analogWrite( RELAY, constrain( round( currentDuty ), 0, 255) );
+  analogWrite( RELAY, currentDuty );
 
 #ifdef DEBUG
   Serial.print("RELAY Duty Cycle: ");
-  Serial.println( String( ( currentDuty / 256.0 ) * 100) + "%" +" Using Power: " + String( round_f( set.power * 100 )) + "%" );
+  Serial.println( "write: " + (String)currentDuty + " " + String( ( currentDuty / 256.0 ) * 100) + "%" +" Using Power: " + String( round_f( set.power * 100 )) + "%" );
 #endif
 }
 
@@ -685,8 +685,8 @@ void ReadCurrentTemp()
 {
   int status = tc.read();
   #ifdef DEBUG
-  Serial.print(" status: ");
-  Serial.println( status );
+  // Serial.print(" status: ");
+  // Serial.println( status );
   #endif
   float internal = tc.getInternal();
   currentTemp = tc.getTemperature() + set.tempOffset;
@@ -938,8 +938,7 @@ void ShowMenu()
     // Serial.flush();
     // setFault(tft);
 
-  // delay(5000);
-  // ShowMenuOptions( true ); // causes crashes why!!!!!
+  ShowMenuOptions( true ); // causes crashes why!!!!!
   Serial.println("showmenu done");
 }
 
@@ -1530,6 +1529,7 @@ long nextButtonPress = 0;
 
 void button0Press()
 {
+  Serial.println("BUTTON PRESS 0");
   if ( nextButtonPress < millis() )
   {
     nextButtonPress = millis() + 20; 
@@ -1617,6 +1617,7 @@ void button0Press()
 
 void button1Press()
 {
+  Serial.println("BUTTON PRESS 1");
   if ( nextButtonPress < millis() )
   {
     nextButtonPress = millis() + 20;
@@ -1647,6 +1648,7 @@ void button1Press()
 
 void button2Press()
 {
+  Serial.println("BUTTON PRESS 2");
   if ( nextButtonPress < millis() )
   {
     nextButtonPress = millis() + 20;
@@ -1669,6 +1671,7 @@ void button2Press()
 
 void button3Press()
 {
+  Serial.println("BUTTON PRESS 3");
   if ( nextButtonPress < millis() )
   {
     nextButtonPress = millis() + 20;
@@ -1824,17 +1827,17 @@ void println_Center( Adafruit_ILI9341 &d, String heading, int centerX, int cente
     uint16_t ww, hh;
 
     d.getTextBounds( string2char(heading), x, y, &x1, &y1, &ww, &hh );
-    Serial.println("println_center");
-    Serial.println(heading);
-    Serial.println(centerX);
-    Serial.println(centerY);
-    Serial.println(x1);
-    Serial.println(y1);
-    Serial.println(ww);
-    Serial.println(hh);
+    // Serial.println("println_center");
+    // Serial.println(heading);
+    // Serial.println(centerX);
+    // Serial.println(centerY);
+    // Serial.println(x1);
+    // Serial.println(y1);
+    // Serial.println(ww);
+    // Serial.println(hh);
 
-    Serial.println( centerX - ww/2 + 2);
-    Serial.println( centerY - hh / 2);
+    // Serial.println( centerX - ww/2 + 2);
+    // Serial.println( centerY - hh / 2);
 
     d.setCursor( centerX - ww/2 + 2, centerY - hh / 2);
     d.println( heading );
@@ -1880,6 +1883,7 @@ void setup()
   // pinMode( BUTTON2, INPUT );
   // pinMode( BUTTON3, INPUT );
 
+  analogWriteRange(255); // esp8266 
   // Turn off the SSR - duty cycle of 0
   SetRelayFrequency( 0 );
 
@@ -1921,15 +1925,12 @@ void setup()
 
   // Start up the TFT and show the boot screen
   tft.begin();
-  delay(300);
   // tft.setFont(&FreeMono9pt7b);
   BootScreen();
 
 #ifdef DEBUG
   Serial.println("Booted Spash Screen");
 #endif
-
-  delay(500);
 
 // Start up the MAX31855
 // @todo sanity
@@ -1948,7 +1949,6 @@ tc.read();
 
 
 void loop(){
-  Serial.println("loop");
   doLoop();
 }
 
