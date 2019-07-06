@@ -287,8 +287,6 @@ void SetCurrentGraph( int index )
   // double y[7] = { 0,0,8,5,2,10,10};
   // baseCurve.setPoints(x,y,7);
 
-  float baseGraphX[7] = { 1, 90, 180, 210, 240, 270, 300 }; // time
-  float baseGraphY[7] = { 27, 90, 130, 138, 165, 138, 27 }; // value
   // float baseGraphX[7] = { 1, 90, 180, 210, 240, 270, 300 }; // time
   // float baseGraphY[7] = { 27, 90, 130, 138, 165, 138, 27 }; // value
   // baseCurve.setPoints(baseGraphX, baseGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
@@ -382,7 +380,7 @@ void doLoop()
         // Show the current probe temp so we can watch as it reaches the minimum starting value
         tft.setTextColor( YELLOW, BLACK );
         tft.setTextSize(5);
-        println_Center( tft, "  "+String( round( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+        println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
       }
     }
     return;
@@ -412,7 +410,7 @@ void doLoop()
         tft.setTextColor( YELLOW, BLACK );
         tft.setTextSize(5);
         int third = tft.width()/4;
-        println_Center( tft, "  "+String( round( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+        println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
       }
     }
     delay(100);
@@ -475,7 +473,7 @@ void doLoop()
         }
         tft.setTextSize(5);
         tft.setTextColor( YELLOW, BLACK );
-        println_Center( tft, " "+String( round( currentTemp ) )+"c ", tft.width() / 2, ( tft.height() / 2 ) + 65 );
+        println_Center( tft, " "+String( round_f( currentTemp ) )+"c ", tft.width() / 2, ( tft.height() / 2 ) + 65 );
 
         
       }
@@ -501,7 +499,7 @@ void doLoop()
           tft.setTextColor( ORANGE, BLACK );
           tft.print( "FAIL " );
           tft.setTextColor( WHITE, BLACK );
-          tft.print( "REACHED " + String( round(calibrationRiseVal * 100) ) +"%") ;
+          tft.print( "REACHED " + String( round_f(calibrationRiseVal * 100) ) +"%") ;
         }
 
         tft.setTextColor( WHITE, BLACK );
@@ -512,14 +510,14 @@ void doLoop()
           tft.setTextColor( GREEN, BLACK );
           tft.print( "PASS" );
           tft.setTextColor( WHITE, BLACK );
-          tft.print( "DROPPED " + String( round(calibrationDropVal * 100) ) +"%") ;
+          tft.print( "DROPPED " + String( round_f(calibrationDropVal * 100) ) +"%") ;
         }
         else
         {
           tft.setTextColor( ORANGE, BLACK );
           tft.print( "FAIL " );
           tft.setTextColor( WHITE, BLACK );
-          tft.print( "DROPPED " + String( round(calibrationDropVal * 100) ) +"%") ;
+          tft.print( "DROPPED " + String( round_f(calibrationDropVal * 100) ) +"%") ;
 
           tft.setTextColor( WHITE, BLACK );
           tft.setCursor( 20, ( tft.height() / 2 ) + 40 );
@@ -563,13 +561,13 @@ void doLoop()
           if ( timeX < CurrentGraph().fanTime )
           {
             float wantedTemp = CurrentGraph().wantedCurve[ (int)timeX ];
-            DrawHeading( String( round( currentTemp ) ) + "/" + String( (int)wantedTemp )+"c", currentPlotColor, BLACK );
+            DrawHeading( String( round_f( currentTemp ) ) + "/" + String( (int)wantedTemp )+"c", currentPlotColor, BLACK );
 
 #ifdef DEBUG
             tft.setCursor( 60, 40 );
             tft.setTextSize(2);
             tft.fillRect( 60, 40, 80, 20, BLACK );
-            tft.println( String( round((currentDuty/256) * 100 )) +"%" );
+            tft.println( String( round_f((currentDuty/256) * 100 )) +"%" );
 #endif
           }
         }
@@ -592,7 +590,7 @@ void SetRelayFrequency( int duty )
 
 #ifdef DEBUG
   Serial.print("RELAY Duty Cycle: ");
-  Serial.println( String( ( currentDuty / 256.0 ) * 100) + "%" +" Using Power: " + String( round( set.power * 100 )) + "%" );
+  Serial.println( String( ( currentDuty / 256.0 ) * 100) + "%" +" Using Power: " + String( round_f( set.power * 100 )) + "%" );
 #endif
 }
 
@@ -1476,7 +1474,7 @@ void UpdateSettingsPower( int posY )
   tft.setCursor( 20, posY );
   tft.print( "POWER ");
   tft.setTextColor( YELLOW, BLACK );
-  tft.println( String( round((set.power * 100))) +"%");
+  tft.println( String( round_f((set.power * 100))) +"%");
   tft.setTextColor( WHITE, BLACK );
 }
 
@@ -1719,7 +1717,7 @@ void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, d
       d.setTextSize(1);
       d.setTextColor(tcolor, bcolor);
       d.setCursor(gx-25, temp);
-      println_Right( d, String(round(i)), gx-25, temp );
+      println_Right( d, String(round_f(i)), gx-25, temp );
       delay(0);
     }
     
@@ -1741,9 +1739,9 @@ void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, d
       d.setCursor(temp, gy + 10);
 
       if ( i <= xhi - xinc )
-        println_Center(d, String(round(i)), temp, gy + 10 );
+        println_Center(d, String(round_f(i)), temp, gy + 10 );
       else
-        println_Center(d, String(round(xhi)), temp, gy + 10 );
+        println_Center(d, String(round_f(xhi)), temp, gy + 10 );
         
       delay(0);
     }
@@ -1947,4 +1945,6 @@ void loop(){
   doLoop();
 }
 
-
+int round_f(float x){
+  return (int)round(x);
+}
