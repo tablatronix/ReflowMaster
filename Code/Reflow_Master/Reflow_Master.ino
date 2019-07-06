@@ -85,9 +85,10 @@ uint16_t textsize_5 = 5;
 #define BUTTON2 A0 // menu buttons
 #define BUTTON3 A0 // menu buttons
 
-#define BUZZER 4  // buzzer
+#define BUZZER 5  // buzzer
 #define FAN    5  // fan control
-#define RELAY  5   // relay control
+#define RELAY  4   // relay control
+
 
 // Just a bunch of re-defined colours
 #define BLUE      0x001F
