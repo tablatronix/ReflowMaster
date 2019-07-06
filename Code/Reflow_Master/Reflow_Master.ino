@@ -1289,6 +1289,7 @@ void AbortReflow()
 {
   if ( state == 1 || state == 2 || state == 16 ) // if we are in warmup or reflow states
   {
+    SetRelayFrequency(0);
     state = 99;
     DrawHeading( "ABORT", RED, BLACK );
 
