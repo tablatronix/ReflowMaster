@@ -134,7 +134,9 @@ bool newSettings = false;
 
 unsigned long nextTempRead;
 unsigned long nextTempAvgRead;
-int avgReadCount = 0;
+int avgReadCount = 0; // running avg
+int avgSamples = 10;
+int tempSampleRate = 1000; // ms
 
 int hotTemp = 50; // C burn temperature for HOT indication, 0=disable
 
@@ -400,7 +402,7 @@ void doLoop()
     // Serial.println("warmup");
     if ( nextTempRead < millis() ) // we only read the probe every second
     {
-      nextTempRead = millis() + 1000;
+      nextTempRead = millis() + tempSampleRate;
   
       ReadCurrentTemp();
       MatchTemp();
@@ -439,7 +441,7 @@ void doLoop()
     // Serial.println("loop menu");
     if ( nextTempRead < millis() )
     {
-      nextTempRead = millis() + 1000;
+      nextTempRead = millis() + tempSampleRate;
 
       // We show the current probe temp in the men screen just for info
       ReadCurrentTemp();
@@ -464,7 +466,7 @@ void doLoop()
   {
     if ( nextTempRead < millis() )
     {
-      nextTempRead = millis() + 1000;
+      nextTempRead = millis() + tempSampleRate;
   
       ReadCurrentTemp();
 
@@ -569,12 +571,12 @@ void doLoop()
   {
     if ( nextTempAvgRead < millis() )
     {
-      nextTempAvgRead = millis() + 100;
+      nextTempAvgRead = millis() + (tempSampleRate/avgSamples); // 10 avgs per second
       ReadCurrentTempAvg();
     }
     if ( nextTempRead < millis() )
     {
-      nextTempRead = millis() + 1000;
+      nextTempRead = millis() + tempSampleRate;
 
       // Set the temp from the average
       currentTemp = ( currentTempAvg / avgReadCount );
@@ -698,18 +700,19 @@ void MatchCalibrationTemp()
 
 void ReadCurrentTempAvg()
 {
-  int status = tc.read();
-
-  #ifdef DEBUG
-  Serial.print(" avg : ");
-  Serial.print( currentTempAvg );
-  Serial.print(" avg count: ");
-  Serial.println( avgReadCount );
-  #endif
-  
+  int status = tc.read();  
   float internal = tc.getInternal();
   currentTempAvg += tc.getTemperature() + set.tempOffset;
   avgReadCount++;
+
+  #ifdef DEBUG
+  Serial.print(" avgtot: ");
+  Serial.print( currentTempAvg );
+  Serial.print(" avg count: ");
+  Serial.println( avgReadCount );
+  Serial.print(" avg: ");
+  Serial.println( currentTempAvg/avgReadCount );  
+  #endif  
 }
 
 
