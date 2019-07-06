@@ -347,6 +347,17 @@ void doLoop()
     delay(2000);
     ShowMenuOptions(true);
     delay(2000);
+    tc.read();
+
+    if(tc.getStatus() != STATUS_OK){
+      tft.fillScreen(RED);
+      tft.setTextColor(WHITE);
+      println_Center( tft, "Thermocouple ERROR", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+      delay(5000);
+      state = 0;
+      return;
+    }
+
     Serial.println("back in loop");
   }
   else if ( state == 1 ) // WARMUP - We sit here until the probe reaches the starting temp for the profile
