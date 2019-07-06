@@ -136,6 +136,7 @@ unsigned long nextTempRead;
 unsigned long nextTempAvgRead;
 int avgReadCount = 0;
 
+int hotTemp = 50; // C burn temperature for HOT indication, 0=disable
 
 double timeX = 0;
 double tempOffset = 60;
@@ -445,7 +446,7 @@ void doLoop()
       // Serial.println((String)currentTemp);
       if ( currentTemp > 0 )
       {
-        tft.setTextColor( YELLOW, BLACK );
+        tft.setTextColor( ((hotTemp > 0) && (currentTemp > hotTemp)) ? RED : YELLOW, BLACK ); // red is above safe temp
         tft.setTextSize(textsize_5);
         int third = tft.width()/4;
         println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
