@@ -89,6 +89,7 @@ uint16_t textsize_5 = 5;
 #define FAN    5  // fan control
 #define RELAY  4   // relay control
 
+// #define PWMRANGE 255 // esp8266 1024
 
 // Just a bunch of re-defined colours
 #define BLUE      0x001F
@@ -330,7 +331,7 @@ void SetCurrentGraph( int index )
 
 void checkButtonAnalog(){
   int level = analogRead(A0);
-  int th = 5;
+  int th = 10;
   int base = 30; // base noise
   int debounce = 300; //ms
   int button0 = 65;
@@ -341,7 +342,7 @@ void checkButtonAnalog(){
   button0 = 57;
   button1 = 170;
   button2 = 544;
-  button3 = 726; // 1+2
+  button3 = 733; // 1+2
    
   if(level > base){
     Serial.println("BUTTON PRESS level:" + (String)level);
@@ -1300,7 +1301,6 @@ void AbortReflow()
 
     state = 10;
     ShowMenu();
-     
   }
 }
 
