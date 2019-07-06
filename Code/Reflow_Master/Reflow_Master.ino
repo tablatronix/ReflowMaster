@@ -296,7 +296,7 @@ void SetCurrentGraph( int index )
   for( int ii = 0; ii <= graphRangeMax_X; ii+= 1 )
   {
     // Serial.println(solderPaste[ currentGraphIndex ].wantedCurve[ii]);
-    // solderPaste[ currentGraphIndex ].wantedCurve[ii] = 1;
+    solderPaste[ currentGraphIndex ].wantedCurve[ii] = baseCurve.value(ii);
     delay(0);
   }
 
