@@ -117,6 +117,11 @@ uint16_t textsize_5 = 5;
 #define DKPURPLE  0x4010
 #define DKGREY    0x4A49
 
+// theme
+#define grid_color DKBLUE
+#define axis_color BLUE
+#define axis_text  WHITE
+
 // Save data struct
 typedef struct {
   boolean valid = false;
@@ -1285,7 +1290,7 @@ void StartReflow()
    ShowMenuOptions( true );
   
   timeX = 0;
-  SetupGraph(tft, 0, 0, 30, 220, 270, 180, graphRangeMin_X, graphRangeMax_X, graphRangeStep_X, graphRangeMin_Y, graphRangeMax_Y, graphRangeStep_Y, "Reflow Temp", " Time [s]", "deg [C]", DKBLUE, BLUE, WHITE, BLACK );
+  SetupGraph(tft, 0, 0, 30, 220, 270, 180, graphRangeMin_X, graphRangeMax_X, graphRangeStep_X, graphRangeMin_Y, graphRangeMax_Y, graphRangeStep_Y, "Reflow Temp", " Time (s)", "deg (C)", grid_color, axis_color, axis_text, BLACK );
   
   DrawHeading( "READY", WHITE, BLACK );
   DrawBaseGraph();
