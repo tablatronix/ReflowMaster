@@ -327,8 +327,38 @@ void SetCurrentGraph( int index )
   }
 }
 
+void checkButtonAnalog(){
+  int level = analogRead(A0);
+  int th = 5;
+  int base = 30; // base noise
+  int debounce = 300; //ms
+  int button0 = 65;
+  int button1 = 195;
+  int button2 = 625;
+  int button3 = 820; // 1+2
+
+  button0 = 57;
+  button1 = 170;
+  button2 = 544;
+  button3 = 726; // 1+2
+   
+  if(level > base){
+    Serial.println("BUTTON PRESS level:" + (String)level);
+    delay(debounce);
+    if(level < base) return; // deboune
+    delay(100); // a button was pressed delay for multi touch
+  }
+       if(level > button0-th && level < button0+th) button0Press();
+  else if(level > button1-th && level < button1+th) button1Press();
+  else if(level > button2-th && level < button2+th) button2Press();
+  else if(level > button3-th && level < button3+th) button3Press();
+  else return;
+}
+
 void doLoop()
 {
+
+  checkButtonAnalog();
   // Used by OneButton to poll for button inputs
   button0.tick();
   // button1.tick();
