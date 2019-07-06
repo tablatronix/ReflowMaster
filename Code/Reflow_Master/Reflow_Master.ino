@@ -289,6 +289,8 @@ void SetCurrentGraph( int index )
 
   float baseGraphX[7] = { 1, 90, 180, 210, 240, 270, 300 }; // time
   float baseGraphY[7] = { 27, 90, 130, 138, 165, 138, 27 }; // value
+  // float baseGraphX[7] = { 1, 90, 180, 210, 240, 270, 300 }; // time
+  // float baseGraphY[7] = { 27, 90, 130, 138, 165, 138, 27 }; // value
   // baseCurve.setPoints(baseGraphX, baseGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
 
   Serial.println("re interpolate splines");
@@ -302,21 +304,21 @@ void SetCurrentGraph( int index )
 
   // calculate the biggest graph movement delta
   float lastWanted = -1;
-  // for ( int i = 0; i < solderPaste[ currentGraphIndex ].offTime; i++ )
-  // {
-  //     float wantedTemp = solderPaste[ currentGraphIndex ].wantedCurve[ i ];
+  for ( int i = 0; i < solderPaste[ currentGraphIndex ].offTime; i++ )
+  {
+      float wantedTemp = solderPaste[ currentGraphIndex ].wantedCurve[ i ];
 
-  //     if ( lastWanted > -1 )
-  //     {
-  //       float wantedDiff = (wantedTemp - lastWanted );
+      if ( lastWanted > -1 )
+      {
+        float wantedDiff = (wantedTemp - lastWanted );
   
-  //       if ( wantedDiff > solderPaste[ currentGraphIndex ].maxWantedDelta ){
-  //         solderPaste[ currentGraphIndex ].maxWantedDelta = wantedDiff;
-  //       }
-  //     }
-  //     lastWanted  = wantedTemp;
-  //     delay(0);   
-  // }
+        if ( wantedDiff > solderPaste[ currentGraphIndex ].maxWantedDelta ){
+          solderPaste[ currentGraphIndex ].maxWantedDelta = wantedDiff;
+        }
+      }
+      lastWanted  = wantedTemp;
+      delay(0);   
+  }
 }
 
 void doLoop()
@@ -338,15 +340,11 @@ void doLoop()
   {
     // Load up the profiles
     LoadPaste();
-    delay(2000);
     // Set the current profile based on last selected
     SetCurrentGraph( set.paste ); // this causes the bug, 
-    delay(2000);
     // Show the main menu
     ShowMenu();
-    delay(2000);
     ShowMenuOptions(true);
-    delay(2000);
     tc.read();
 
     if(tc.getStatus() != STATUS_OK){
@@ -590,7 +588,7 @@ void SetRelayFrequency( int duty )
   currentDuty = ((float)duty * set.power );
 
   // Write the clamped duty cycle to the RELAY GPIO
-  // analogWrite( RELAY, constrain( round( currentDuty ), 0, 255) );
+  analogWrite( RELAY, constrain( round( currentDuty ), 0, 255) );
 
 #ifdef DEBUG
   Serial.print("RELAY Duty Cycle: ");
@@ -893,7 +891,7 @@ void ShowMenu()
   #endif
 
   state = 10;
-  // SetRelayFrequency( 0 );
+  SetRelayFrequency( 0 );
 
   // set = flash_store.read();
   #ifdef DEBUG
@@ -1870,7 +1868,7 @@ void setup()
 {
   // Setup all GPIO
   // pinMode( BUZZER, OUTPUT );
-  // pinMode( RELAY, OUTPUT );
+  pinMode( RELAY, OUTPUT );
   // pinMode( FAN, OUTPUT );
   
   // pinMode( BUTTON0, INPUT );
@@ -1879,7 +1877,7 @@ void setup()
   // pinMode( BUTTON3, INPUT );
 
   // Turn off the SSR - duty cycle of 0
-  // SetRelayFrequency( 0 );
+  SetRelayFrequency( 0 );
 
 // #ifdef DEBUG
   Serial.begin(115200);
@@ -1946,15 +1944,6 @@ tc.read();
 
 void loop(){
   Serial.println("loop");
-  // for(int i=0;i<10;i++){
-  //   // doloop();
-  //   LoadPaste();
-  //   SetCurrentGraph( set.paste ); // this causes the bug, 
-
-  //   delay(5000);
-  //   Serial.println(micros());
-  // }
-  // 
   doLoop();
 }
 
