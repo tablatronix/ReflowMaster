@@ -39,6 +39,8 @@ HISTORY:
 #include "ReflowMasterProfile.h" 
 // #include <FlashStorage.h> // Library Manager
 
+// #include <Fonts/FreeMono9pt7b.h>
+
 // used to obtain the size of an array of any type
 #define ELEMENTS(x)   (sizeof(x) / sizeof(x[0]))
 
@@ -65,6 +67,12 @@ HISTORY:
 #define MAXCLK  D0 // 16
 
 uint16_t rotation = 3;
+
+uint16_t textsize_1 = 1;
+uint16_t textsize_2 = 2;
+uint16_t textsize_3 = 3;
+uint16_t textsize_4 = 4;
+uint16_t textsize_5 = 5;
 
 // #ifdef ESP8266
 // #define A1 A0
@@ -379,7 +387,7 @@ void doLoop()
       {
         // Show the current probe temp so we can watch as it reaches the minimum starting value
         tft.setTextColor( YELLOW, BLACK );
-        tft.setTextSize(5);
+        tft.setTextSize(textsize_5);
         println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
       }
     }
@@ -408,7 +416,7 @@ void doLoop()
       if ( currentTemp > 0 )
       {
         tft.setTextColor( YELLOW, BLACK );
-        tft.setTextSize(5);
+        tft.setTextSize(textsize_5);
         int third = tft.width()/4;
         println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
       }
@@ -434,7 +442,7 @@ void doLoop()
       if ( calibrationState < 2 )
       {
         tft.setTextColor( CYAN, BLACK );
-        tft.setTextSize(2);
+        tft.setTextSize(textsize_2);
 
         if ( calibrationState == 0 )
         {
@@ -468,10 +476,10 @@ void doLoop()
             tft.setTextColor( WHITE, BLACK );
           }
           
-          tft.setTextSize(4);
+          tft.setTextSize(textsize_4);
           println_Center( tft, " "+String( calibrationSeconds )+" secs ", tft.width() / 2, ( tft.height() / 2 ) +20 );
         }
-        tft.setTextSize(5);
+        tft.setTextSize(textsize_5);
         tft.setTextColor( YELLOW, BLACK );
         println_Center( tft, " "+String( round_f( currentTemp ) )+"c ", tft.width() / 2, ( tft.height() / 2 ) + 65 );
 
@@ -482,7 +490,7 @@ void doLoop()
         calibrationState = 3;
         
         tft.setTextColor( GREEN, BLACK );
-        tft.setTextSize(2);
+        tft.setTextSize(textsize_2);
         tft.fillRect( 0, (tft.height() / 2 ) - 45, tft.width(), (tft.height() / 2 ) + 45, BLACK );
         println_Center( tft, "RESULTS!", tft.width() / 2, ( tft.height() / 2 ) - 45 );
 
@@ -565,7 +573,7 @@ void doLoop()
 
 #ifdef DEBUG
             tft.setCursor( 60, 40 );
-            tft.setTextSize(2);
+            tft.setTextSize(textsize_2);
             tft.fillRect( 60, 40, 80, 20, BLACK );
             tft.println( String( round_f((currentDuty/256) * 100 )) +"%" );
 #endif
@@ -831,7 +839,7 @@ void StartFan ( bool start )
 
 void DrawHeading( String lbl, unsigned int acolor, unsigned int bcolor )
 {
-    tft.setTextSize(4);
+    tft.setTextSize(textsize_4);
     tft.setTextColor(acolor , bcolor);
     tft.setCursor(0,0);
     tft.fillRect( 0, 0, 220, 40, BLACK );
@@ -870,13 +878,11 @@ void BootScreen()
   tft.fillScreen(BLACK);
 
   tft.setTextColor( GREEN, BLACK );
-  tft.setTextSize(3);
+  tft.setTextSize(textsize_1);
   println_Center( tft, "REFLOW MASTER", tft.width() / 2, ( tft.height() / 2 ) - 8 );
 
-  tft.setTextSize(2);
   tft.setTextColor( WHITE, BLACK );
   println_Center( tft, "unexpectedmaker.com", tft.width() / 2, ( tft.height() / 2 ) + 20 );
-  tft.setTextSize(1);
   println_Center( tft, "PCB v2018-2, Code v" + ver, tft.width() / 2, tft.height() - 20 );
 
   state = 10;
@@ -899,7 +905,7 @@ void ShowMenu()
   Serial.println("clear display");
   
   tft.setTextColor( WHITE, BLACK );
-  tft.setTextSize(2);
+  tft.setTextSize(textsize_2);
   tft.setCursor( 20, 20 );
   tft.println( "CURRENT PASTE" );
   Serial.println("disp curr paste");
@@ -919,7 +925,7 @@ void ShowMenu()
     println_Center( tft, "Settings Stomped!!", tft.width() / 2, tft.height() - 80 );
   }
 
-  tft.setTextSize(1);
+  tft.setTextSize(textsize_1);
   tft.setTextColor( WHITE, BLACK );
     // d.setCursor( 54,152 );
     // d.println( "Settings Stomped!!" );
@@ -952,7 +958,7 @@ void ShowSettings()
 
 
   tft.setTextColor( BLUE, BLACK );
-  tft.setTextSize(2);
+  tft.setTextSize(textsize_2);
   tft.setCursor( 20, 20 );
   tft.println( "SETTINGS" );
 
@@ -1001,7 +1007,7 @@ void ShowPaste()
   tft.fillScreen(BLACK);
 
   tft.setTextColor( BLUE, BLACK );
-  tft.setTextSize(2);
+  tft.setTextSize(textsize_2);
   tft.setCursor( 20, 20 );
   tft.println( "SWITCH PASTE" );
 
@@ -1016,11 +1022,11 @@ void ShowPaste()
       else
         tft.setTextColor( WHITE, BLACK );
 
-      tft.setTextSize(2);
+      tft.setTextSize(textsize_2);
       tft.setCursor( 20, y );
 
       tft.println( String( solderPaste[i].tempDeg) +"d " + solderPaste[i].n );
-      tft.setTextSize(1);
+      tft.setTextSize(textsize_1);
       tft.setCursor( 20, y + 17 );
       tft.println( solderPaste[i].t );
       tft.setTextColor( GREY, BLACK );
@@ -1042,7 +1048,7 @@ void ShowMenuOptions( bool clearAll )
   int buttonWidth = 4;
 
   tft.setTextColor( WHITE, BLACK );
-  tft.setTextSize(2);
+  tft.setTextSize(textsize_2);
 
   if ( clearAll )
   {
@@ -1162,12 +1168,12 @@ void UpdateSettingsPointer()
   if ( state == 11 )
   {
       tft.setTextColor( BLUE, BLACK );
-      tft.setTextSize(2);
+      tft.setTextSize(textsize_2);
       tft.fillRect( 0, 20, 20, tft.height()-20, BLACK );
       tft.setCursor( 5, ( 50 + ( 20 * settings_pointer ) ) );
       tft.println(">");
 
-      tft.setTextSize(1);
+      tft.setTextSize(textsize_1);
       tft.setTextColor( GREEN, BLACK );
       tft.fillRect( 0, tft.height()-40, tft.width(), 40, BLACK );
       switch ( settings_pointer )
@@ -1204,12 +1210,12 @@ void UpdateSettingsPointer()
           //println_Center( tft, "", tft.width() / 2, tft.height() - 20 );
           break;
       }
-      tft.setTextSize(2);
+      tft.setTextSize(textsize_2);
   }
   else if ( state == 12 )
   {
       tft.setTextColor( BLUE, BLACK );
-      tft.setTextSize(2);
+      tft.setTextSize(textsize_2);
       tft.fillRect( 0, 20, 20, tft.height()-20, BLACK );
       tft.setCursor( 5, ( 50 + ( 20 * ( settings_pointer * 2 ) ) ) );
       tft.println(">");
@@ -1229,7 +1235,7 @@ void StartWarmup()
   buzzerCount = 5;
 
   tft.setTextColor( GREEN, BLACK );
-  tft.setTextSize(3);
+  tft.setTextSize(textsize_3);
   println_Center( tft, "WARMING UP", tft.width() / 2, ( tft.height() / 2 ) - 30 );
 
   tft.setTextColor( WHITE, BLACK );
@@ -1338,7 +1344,7 @@ void StartOvenCheck()
 #endif
   tft.fillScreen(BLACK);
   tft.setTextColor( CYAN, BLACK );
-  tft.setTextSize(2);
+  tft.setTextSize(textsize_2);
   tft.setCursor( 20, 20 );
   tft.println( "OVEN CHECK" );
 
@@ -1366,7 +1372,7 @@ void ShowOvenCheck()
   
   tft.fillScreen(BLACK);
   tft.setTextColor( CYAN, BLACK );
-  tft.setTextSize(2);
+  tft.setTextSize(textsize_2);
   tft.setCursor( 20, 20 );
   tft.println( "OVEN CHECK" );
 
@@ -1375,7 +1381,7 @@ void ShowOvenCheck()
 
   ShowMenuOptions( true );
 
-  tft.setTextSize(2);
+  tft.setTextSize(textsize_2);
   tft.setCursor( 0, 60 );
   tft.setTextColor( YELLOW, BLACK );
 
@@ -1407,19 +1413,19 @@ void ShowResetDefaults()
 {
   tft.fillScreen(BLACK);
   tft.setTextColor( WHITE, BLACK );
-  tft.setTextSize(2);
+  tft.setTextSize(textsize_2);
   tft.setCursor( 20, 90 );
       
   tft.setTextColor( WHITE, BLACK );
   tft.print( "RESET SETTINGS" );
-  tft.setTextSize(3);
+  tft.setTextSize(textsize_3);
   tft.setCursor( 20, 120 );
   tft.println( "ARE YOU SURE?" );
 
   state = 13;
   ShowMenuOptions( false );
 
-  tft.setTextSize(1);
+  tft.setTextSize(textsize_1);
   tft.setTextColor( GREEN, BLACK );
   tft.fillRect( 0, tft.height()-40, tft.width(), 40, BLACK );
   println_Center( tft, "Settings restore cannot be undone!", tft.width() / 2, tft.height() - 20 );
@@ -1714,7 +1720,7 @@ void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, d
         d.drawLine(gx, temp, gx + w, temp, gcolor);
       }
 
-      d.setTextSize(1);
+      d.setTextSize(textsize_1);
       d.setTextColor(tcolor, bcolor);
       d.setCursor(gx-25, temp);
       println_Right( d, String(round_f(i)), gx-25, temp );
@@ -1734,7 +1740,7 @@ void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, d
         d.drawLine(temp, gy, temp, gy - h, gcolor);
       }
 
-      d.setTextSize(1);
+      d.setTextSize(textsize_1);
       d.setTextColor(tcolor, bcolor);
       d.setCursor(temp, gy + 10);
 
@@ -1747,18 +1753,18 @@ void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, d
     }
 
     //now draw the labels
-    d.setTextSize(2);
+    d.setTextSize(textsize_2);
     d.setTextColor(tcolor, bcolor);
     d.setCursor(gx , gy - h - 30);
     d.println(title);
 
-    d.setTextSize(1);
+    d.setTextSize(textsize_1);
     d.setTextColor(acolor, bcolor);
     d.setCursor(w - 25 , gy - 10);
     d.println(xlabel);
 
     tft.setRotation(rotation-1);
-    d.setTextSize(1);
+    d.setTextSize(textsize_1);
     d.setTextColor(acolor, bcolor);
     d.setCursor(w - 116, 34 );
     d.println(ylabel);
@@ -1916,6 +1922,7 @@ void setup()
   // Start up the TFT and show the boot screen
   tft.begin();
   delay(300);
+  // tft.setFont(&FreeMono9pt7b);
   BootScreen();
 
 #ifdef DEBUG
