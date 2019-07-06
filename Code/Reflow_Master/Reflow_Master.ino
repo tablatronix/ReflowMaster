@@ -282,7 +282,7 @@ void SetCurrentGraph( int index )
   // Serial.println();
   baseCurve.setPoints(solderPaste[ currentGraphIndex ].reflowGraphX, solderPaste[ currentGraphIndex ].reflowGraphY, solderPaste[ currentGraphIndex ].reflowTangents, solderPaste[ currentGraphIndex ].len);
   // baseCurve.setPoints(CurrentGraph().reflowGraphX, CurrentGraph().reflowGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
-  // baseCurve.setDegree( Hermite );
+  baseCurve.setDegree( Hermite );
   // double x[7] = {-1,0,1,2,3,4, 5};
   // double y[7] = { 0,0,8,5,2,10,10};
   // baseCurve.setPoints(x,y,7);
