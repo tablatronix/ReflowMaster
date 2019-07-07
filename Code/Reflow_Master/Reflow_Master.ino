@@ -150,7 +150,7 @@ int tempSampleRate = 1000; // ms
 
 int hotTemp  = 80; // C burn temperature for HOT indication, 0=disable
 int coolTemp = 50; // C burn temperature for HOT indication, 0=disable
-int shutDownTemp = 150; // degrees C
+int shutDownTemp = 230; // degrees C
 
 double timeX = 0;
 
@@ -371,8 +371,34 @@ void checkButtonAnalog(){
   else return;
 }
 
+void safetyCheck(){
+
+  tc.read();
+  if(tc.getStatus() != STATUS_OK){
+    tft.setTextColor(WHITE);
+    tft.fillScreen(RED);
+    println_Center( tft, "Thermocouple ERROR", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+    delay(5000);
+    state = 0;
+  }
+  else if((shutDownTemp>0) && currentTemp >= shutDownTemp && (state != 10 && state != 3)){
+    SetRelayFrequency(0);
+    tft.setTextColor(WHITE);
+    tft.fillScreen(RED);
+    tft.setTextSize(textsize_3);
+    println_Center( tft, "HIGH TEMP ERROR", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+    tft.setTextSize(textsize_2);
+    println_Center( tft, "Aborting reflow", tft.width() / 2, ( tft.height() / 2 ) + 40 );
+    delay(5000);
+    // if(state == 2) EndReflow(); // @todo cannot redraw last graph
+    state = 0;
+  }
+}
+
 void doLoop()
 {
+
+  safetyCheck();
 
   checkButtonAnalog();
   // Used by OneButton to poll for button inputs
@@ -395,16 +421,6 @@ void doLoop()
     SetCurrentGraph( set.paste ); // this causes the bug, 
     // Show the main menu
     ShowMenu();
-
-    tc.read();
-    if(tc.getStatus() != STATUS_OK){
-      tft.fillScreen(RED);
-      tft.setTextColor(WHITE);
-      println_Center( tft, "Thermocouple ERROR", tft.width() / 2, ( tft.height() / 2 ) + 10 );
-      delay(5000);
-      state = 0;
-      return;
-    }
 
     Serial.println("back in loop");
   }
