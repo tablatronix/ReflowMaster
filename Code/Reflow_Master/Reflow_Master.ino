@@ -122,6 +122,11 @@ uint16_t textsize_5 = 5;
 #define axis_color BLUE
 #define axis_text  WHITE
 
+#define ButtonCol1 GREEN
+#define ButtonCol2 RED
+#define ButtonCol3 BLUE
+#define ButtonCol4 YELLOW
+
 // Save data struct
 typedef struct {
   boolean valid = false;
@@ -140,13 +145,14 @@ bool newSettings = false;
 unsigned long nextTempRead;
 unsigned long nextTempAvgRead;
 int avgReadCount = 0; // running avg
-int avgSamples = 10;
+int avgSamples = 10; // 1 to disable averaging
 int tempSampleRate = 1000; // ms
 
-int hotTemp = 50; // C burn temperature for HOT indication, 0=disable
+int hotTemp  = 80; // C burn temperature for HOT indication, 0=disable
+int coolTemp = 50; // C burn temperature for HOT indication, 0=disable
+int shutDownTemp = 150; // degrees C
 
 double timeX = 0;
-double tempOffset = 60;
 
 byte state; // 0 = ready, 1 = warmup, 2 = reflow, 3 = finished, 10 Menu, 11+ settings
 byte state_settings = 0;
@@ -349,7 +355,7 @@ void checkButtonAnalog(){
 
   button0 = 57;
   button1 = 170;
-  button2 = 544;
+  button2 = 550;
   button3 = 733; // 1+2
    
   if(level > base){
@@ -470,7 +476,7 @@ void doLoop()
     // Currently not used
     return;
   }
-  else if ( state == 16 ) // calibration - not currently used
+  else if ( state == 16 ) // Oven Check
   {
     if ( nextTempRead < millis() )
     {
@@ -1340,9 +1346,9 @@ void SetDefaults()
   set.power = 1;
   set.paste = 0;
   set.useFan = false;
-  set.lookAhead = 12;
-  set.lookAheadWarm = 12;
-  set.startFullBlast = false;
+  set.lookAhead = 5;     // look ahead when temp is steady state
+  set.lookAheadWarm = 5; // heat acceleration, lookahead when temp heating
+  set.startFullBlast = true;
   set.tempOffset = 0;
 }
 
