@@ -864,9 +864,12 @@ void MatchTemp()
   duty = constrain( duty, 0, 256 );
 
   // override for full blast at start
-  if ( set.startFullBlast && timeX < CurrentGraph().reflowGraphX[1] )
-    duty = 256;
-    
+  Serial.println("startFullBlast");
+  Serial.println(timeX);
+  Serial.println(CurrentGraph().reflowGraphX[1]);
+  // if ( set.startFullBlast && (timeX < CurrentGraph().reflowGraphX[1]) ) duty = 256;
+  if ( set.startFullBlast && timeX < CurrentGraph().reflowGraphX[1] && currentTemp < wantedTemp ) duty = 256;
+  
   currentPlotColor = GREEN;
 
   SetRelayFrequency( duty );
