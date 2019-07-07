@@ -453,7 +453,10 @@ void doLoop()
       // Serial.println((String)currentTemp);
       if ( currentTemp > 0 )
       {
-        tft.setTextColor( ((hotTemp > 0) && (currentTemp > hotTemp)) ? RED : YELLOW, BLACK ); // red is above safe temp
+        if(currentTemp > hotTemp) tft.setTextColor( RED, BLACK );
+        else if(currentTemp < coolTemp) tft.setTextColor( GREEN, BLACK );
+        else tft.setTextColor( YELLOW, BLACK );
+
         tft.setTextSize(textsize_5);
         int third = tft.width()/4;
         println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
