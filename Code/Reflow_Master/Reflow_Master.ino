@@ -199,7 +199,7 @@ int graphRangeStep_Y = 15;
 Spline baseCurve;
 
 // Initialise the TFT screen
-Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC,TFT_RESET);
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RESET);
 
 // Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RESET);
 
@@ -1687,6 +1687,9 @@ void button0Press()
 void button1Press()
 {
   Serial.println("BUTTON PRESS 1");
+  bool res = anyButton();
+  if(res) return;
+
   if ( nextButtonPress < millis() )
   {
     nextButtonPress = millis() + 20;
@@ -2024,3 +2027,54 @@ void loop(){
 int round_f(float x){
   return (int)round(x);
 }
+
+void doWake(){
+}
+
+void doAbort(){
+}
+
+// any button press handler
+// if sleeping wake up
+// if reflow any button abort
+bool anyButton(){
+  bool sleep = false;
+  if(state == 1 || state == 2 || state == 15){
+    doAbort();
+    return true;
+  }
+  else {
+    if(sleep) doWake();
+    return true;
+  }  
+  return false;
+}
+
+// states GUI
+// @TODO using byte definitions for states but also using second level for reflow 
+// states warmup etc, neds to be refactored a bit
+// 
+// byte state; // 0 = ready, 1 = warmup, 2 = reflow, 3 = finished, 10 Menu, 11+ settings
+
+typedef enum {
+    READY    = 0 ,
+    WARMUP   = 1 ,
+    REFLOW   = 2 ,
+    FINISHED = 3 ,
+    MENU     = 0 ,
+    SETTING  = 11, // above 11 is settings menu options
+    PASTE    = 12,
+    RESET    = 13,
+    OVENCHECK = 15,
+
+} rm_states_t;
+
+
+// debugging levels
+typedef enum {
+    DEBUG_ERROR     = 0,
+    DEBUG_NOTIFY    = 1, // default
+    DEBUG_VERBOSE   = 2,
+    DEBUG_DEV       = 3,
+    DEBUG_MAX       = 4
+} wm_debuglevel_t;
