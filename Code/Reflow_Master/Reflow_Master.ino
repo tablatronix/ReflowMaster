@@ -33,8 +33,12 @@ HISTORY:
 #include <SPI.h>
 #include <spline.h> // http://github.com/kerinin/arduino-splines
 #include "Adafruit_GFX.h" // Library Manager
-#include "Adafruit_ILI9341.h" // Library Manager
-#include "MAX31855.h" // by Rob Tillaart Library Manager
+// #include "Adafruit_ILI9341.h" // Library Manager
+#include <Adafruit_ST7735.h> // Hardware-specific library for ST7735
+
+// #include "MAX31855.h" // by Rob Tillaart Library Manager
+#include "Adafruit_MAX31855.h"
+
 #include "OneButton.h" // Library Manager
 #include "ReflowMasterProfile.h" 
 // #include <FlashStorage.h> // Library Manager
@@ -53,24 +57,38 @@ HISTORY:
 // #define TFT_RESET 1
 
 // @TODO use CS and get tft and max31855 working with hspi pins
-#define TFT_DC    15 // D1
-#define TFT_CS    -1 // D2
-#define TFT_RESET D1
+#define TFT_DC    D1 // D1
+#define TFT_CS    D8 // D2
+#define TFT_RST   D0
+// Initialise the TFT screen
+// Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RESET);
+Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
+
+// #nodemcu hspi
+// scl      D5 14
+// mosi/sda D7 13
+// miso     D6 12
+// cs       D8 15
+
 
 // MAX 31855 Pins
 // #define MAXDO   14
 // #define MAXCS   13
 // #define MAXCLK  12
 
-#define MAXDO   D3 // 0
+#define MAXDO   D6 // 0
 #define MAXCS   D4 // 2
-#define MAXCLK  D0 // 16
+#define MAXCLK  D5 // 16
+Adafruit_MAX31855 tc(MAXCS);
+// Adafruit_MAX31855 tc(MAXCLK, MAXCS, MAXDO);
+// Initialise the MAX31855 IC for thermocouple tempterature reading
+// MAX31855 tc(MAXCLK, MAXCS, MAXDO);
 
 uint16_t rotation = 3;
 
 uint16_t textsize_1 = 1;
-uint16_t textsize_2 = 2;
-uint16_t textsize_3 = 3;
+uint16_t textsize_2 = 1;
+uint16_t textsize_3 = 1;
 uint16_t textsize_4 = 4;
 uint16_t textsize_5 = 5;
 
@@ -146,7 +164,7 @@ unsigned long nextTempRead;
 unsigned long nextTempAvgRead;
 int avgReadCount = 0; // running avg
 int avgSamples = 10; // 1 to disable averaging
-int tempSampleRate = 1000; // ms
+int tempSampleRate = 10000; // how often to sample temperature when idle
 
 int hotTemp  = 80; // C burn temperature for HOT indication, 0=disable
 int coolTemp = 50; // C burn temperature for HOT indication, 0=disable
@@ -186,6 +204,11 @@ bool isFanOn = false;
 float lastWantedTemp = -1;
 int buzzerCount = 5;
 
+// - tablatronix
+bool tcWarn = false; // stop and show error if a tc issue is detected
+bool skipWarmup = false;
+bool settingWarn = false;
+bool useInternal = true;
 
 // Graph Size for UI
 int graphRangeMin_X = 0;
@@ -195,16 +218,11 @@ int graphRangeMax_Y = 165;
 int graphRangeStep_X = 30;
 int graphRangeStep_Y = 15;
 
+float maxT;
+float minT;
+
 // Create a spline reference for converting profile values to a spline for the graph
 Spline baseCurve;
-
-// Initialise the TFT screen
-Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RESET);
-
-// Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RESET);
-
-// Initialise the MAX31855 IC for thermocouple tempterature reading
-MAX31855 tc(MAXCLK, MAXCS, MAXDO);
 
 // Initialise the buttons using OneButton library
 OneButton button0(BUTTON0, false);
@@ -344,8 +362,9 @@ void SetCurrentGraph( int index )
 }
 
 void checkButtonAnalog(){
+  // @todo this will have to be reworked and it is very voltage drop dependant
   int level = analogRead(A0);
-  int th = 10;
+  int th = 15;
   int base = 30; // base noise
   int debounce = 300; //ms
   int button0 = 65;
@@ -353,7 +372,7 @@ void checkButtonAnalog(){
   int button2 = 625;
   int button3 = 820; // 1+2
 
-  button0 = 57;
+  button0 = 110;
   button1 = 170;
   button2 = 550;
   button3 = 733; // 1+2
@@ -372,13 +391,18 @@ void checkButtonAnalog(){
 }
 
 void safetyCheck(){
+  // provides some sort of thermal runaway protection,
+  // @todo add sanity checking for temperature readings, >0 etc
+  Serial.println("tc status: " + getTcStatus());
+  Serial.println("tc internal: " + (String)tc.readInternal());
 
-  tc.read();
-  if(tc.getStatus() != STATUS_OK){
+  if(!tcWarn) return;
+  // tc.read(); // @todo we probably do not want to read sensor too often, will need to check lastread timer
+  if(tc.readError() != 0){
     tft.setTextColor(WHITE);
     tft.fillScreen(RED);
     println_Center( tft, "Thermocouple ERROR", tft.width() / 2, ( tft.height() / 2 ) + 10 );
-    delay(5000);
+    delay(5000); // show warning for 5 seconds
     state = 0;
   }
   else if((shutDownTemp>0) && currentTemp >= shutDownTemp && (state != 10 && state != 3)){
@@ -389,16 +413,32 @@ void safetyCheck(){
     println_Center( tft, "HIGH TEMP ERROR", tft.width() / 2, ( tft.height() / 2 ) + 10 );
     tft.setTextSize(textsize_2);
     println_Center( tft, "Aborting", tft.width() / 2, ( tft.height() / 2 ) + 40 );
-    delay(5000);
-    // if(state == 2) EndReflow(); // @todo cannot redraw last graph
+    delay(5000); // show warning for 5 seconds
+    // if(state == 2) EndReflow(); // @todo cannot redraw last graph, which would be nice
     state = 0;
   }
+}
+
+#define STATUS_OK               0x00
+#define STATUS_OPEN_CIRCUIT     0x01
+#define STATUS_SHORT_TO_GND     0x02
+#define STATUS_SHORT_TO_VCC     0x04
+#define STATUS_NOREAD           0x80
+String getTcStatus(){
+  // tc.read();
+  uint8_t tcStatus = tc.readError();
+  if(tcStatus == STATUS_OK) return "OK";
+  else if(tcStatus == STATUS_OPEN_CIRCUIT) return "Open";
+  else if(tcStatus == STATUS_SHORT_TO_GND) return "GND Short";
+  else if(tcStatus == STATUS_SHORT_TO_VCC) return "VCC Short";
+  else if(tcStatus == STATUS_NOREAD) return "Read Failed";
+  else return "ERROR";
 }
 
 void doLoop()
 {
 
-  safetyCheck();
+  // safetyCheck();
 
   checkButtonAnalog();
   // Used by OneButton to poll for button inputs
@@ -421,11 +461,14 @@ void doLoop()
     SetCurrentGraph( set.paste ); // this causes the bug, 
     // Show the main menu
     ShowMenu();
-
+    delay(1000);
+    tft.fillScreen(BLACK);
+    state = 20;
     Serial.println("back in loop");
   }
   else if ( state == 1 ) // WARMUP - We sit here until the probe reaches the starting temp for the profile
   {
+    if(skipWarmup){state == 2; return;}
     // Serial.println("warmup");
     if ( nextTempRead < millis() ) // we only read the probe every second
     {
@@ -465,26 +508,40 @@ void doLoop()
   }
   else if ( state == 10 ) // MENU
   {
-    // Serial.println("loop menu");
+    testTC();
+    return;
     if ( nextTempRead < millis() )
     {
+      Serial.println("loop menu");
       nextTempRead = millis() + tempSampleRate;
-
       // We show the current probe temp in the men screen just for info
       ReadCurrentTemp();
-      // Serial.println((String)currentTemp);
+      Serial.println((String)currentTemp);
       if ( currentTemp > 0 )
       {
+        Serial.println("deviation: " + (String)(maxT-minT));
+        // color code temperature
         if(currentTemp > hotTemp) tft.setTextColor( RED, BLACK );
         else if(currentTemp < coolTemp) tft.setTextColor( GREEN, BLACK );
         else tft.setTextColor( YELLOW, BLACK );
 
-        tft.setTextSize(textsize_5);
+        tft.setTextSize(textsize_1);
         int third = tft.width()/4;
-        println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+        // println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+        println_Center( tft, "  "+String( ( currentTemp ) )+"c  +/-" + (String)(maxT-minT), tft.width() / 2, ( tft.height() / 2 ) + 10 );
+        maxT = minT = currentTemp;
+      }
+      else{
+        tft.setTextSize(textsize_1);
+        tft.setTextColor( RED, BLACK );
+        println_Center( tft, "error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) + 10 );
       }
     }
-    delay(100);
+    ReadCurrentTemp();
+    if(currentTemp>maxT) maxT = currentTemp;
+    if(currentTemp<minT) minT = currentTemp;
+    // Serial.println(minT);
+    // Serial.println(maxT);
     return;
   }
   else if ( state == 15 )
@@ -596,6 +653,9 @@ void doLoop()
         }
       }
     }
+  }
+  else if(state == 20){
+    testTC();
   }
   else // state is 2 - REFLOW
   {
@@ -730,9 +790,10 @@ void MatchCalibrationTemp()
 
 void ReadCurrentTempAvg()
 {
-  int status = tc.read();  
-  float internal = tc.getInternal();
-  currentTempAvg += tc.getTemperature() + set.tempOffset;
+  int status = tc.readError();  
+  float internal = tc.readInternal();
+  if(useInternal) currentTempAvg += internal + set.tempOffset;
+  else currentTempAvg += tc.readCelsius() + set.tempOffset;
   avgReadCount++;
 
   #ifdef DEBUG
@@ -745,17 +806,33 @@ void ReadCurrentTempAvg()
   #endif  
 }
 
-
 // Read the temp probe
 void ReadCurrentTemp()
 {
-  int status = tc.read();
+  // pinMode(MAXDO, INPUT); // Data mode
+  // digitalWrite(MAXDO, HIGH); // Data mode
+  // pinMode(MAXCLK, OUTPUT); // Data mode
+  // digitalWrite(MAXCLK, HIGH); // Data mode
+
+  // delay(1000);
+  int status = tc.readError();
   #ifdef DEBUG
-  // Serial.print(" status: ");
-  // Serial.println( status );
+  Serial.print(" status: ");
+  Serial.println( status );
   #endif
-  float internal = tc.getInternal();
-  currentTemp = tc.getTemperature() + set.tempOffset;
+  float internal = tc.readInternal();
+  if(useInternal) currentTemp = internal + set.tempOffset;
+  else currentTemp = tc.readCelsius() + set.tempOffset;
+  // delay(1000);
+      // pinMode(TFT_CS, OUTPUT);
+    // digitalWrite(TFT_CS, HIGH); // Deselect
+    // pinMode(TFT_DC, OUTPUT);
+    // digitalWrite(TFT_DC, HIGH); // Data mode
+
+  // tft.initR(INITR_144GREENTAB);
+  // tft.setRotation(rotation);
+    // digitalWrite(MAXCLK, LOW); // Data mode
+
 }
 
 // This is where the magic happens for temperature matching
@@ -943,7 +1020,6 @@ void DrawBaseGraph()
 
 void BootScreen()
 {
-  tft.setRotation(rotation);
   tft.fillScreen(BLACK);
 
   tft.setTextColor( GREEN, BLACK );
@@ -970,7 +1046,7 @@ void ShowMenu()
   #ifdef DEBUG
     Serial.println("TFT Show Menu");
   #endif  
-  tft.fillScreen(ILI9341_BLACK);
+  tft.fillScreen(ST77XX_BLACK);
   Serial.println("clear display");
   
   tft.setTextColor( WHITE, BLACK );
@@ -988,7 +1064,7 @@ void ShowMenu()
   Serial.println("disp temperature");
 
   // causes crashes also, this makes no sense
-  if ( newSettings )
+  if ( newSettings && settingWarn )
   {
     tft.setTextColor( CYAN, BLACK );
     println_Center( tft, "Settings Stomped!!", tft.width() / 2, tft.height() - 80 );
@@ -996,9 +1072,9 @@ void ShowMenu()
 
   tft.setTextSize(textsize_1);
   tft.setTextColor( WHITE, BLACK );
-    // d.setCursor( 54,152 );
-    // d.println( "Settings Stomped!!" );
-    
+    tft.setCursor( 54,152 );
+    // tft.println( "Settings Stomped!!" );
+    tft.println(millis());
     // tft.setCursor( 45,216 );
     // tft.println( "Reflow Master - PCB v2018-2, Code v1.03" );  
     println_Center( tft, "Reflow Master - PCB v2018-2, Code v" + ver, tft.width() / 2, tft.height() - 20 );
@@ -1606,7 +1682,8 @@ void button0Press()
     
     if ( state == 10 )
     {
-      StartWarmup();
+      // StartWarmup();
+      StartReflow();
     }
     else if ( state == 1 || state == 2 || state == 16 )
     {
@@ -1773,7 +1850,7 @@ void button3Press()
  * https://www.youtube.com/watch?v=YejRbIKe6e0
  */
 
-void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, double w, double h, double xlo, double xhi, double xinc, double ylo, double yhi, double yinc, String title, String xlabel, String ylabel, unsigned int gcolor, unsigned int acolor, unsigned int tcolor, unsigned int bcolor )
+void SetupGraph(Adafruit_ST7735 &d, double x, double y, double gx, double gy, double w, double h, double xlo, double xhi, double xinc, double ylo, double yhi, double yinc, String title, String xlabel, String ylabel, unsigned int gcolor, unsigned int acolor, unsigned int tcolor, unsigned int bcolor )
 {
   double ydiv, xdiv;
   double i;
@@ -1847,7 +1924,7 @@ void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, d
     delay(0);
 }
 
-void Graph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, double w, double h )
+void Graph(Adafruit_ST7735 &d, double x, double y, double gx, double gy, double w, double h )
 {
   // recall that ox and oy are initialized as static above
   x =  (x - graphRangeMin_X) * ( w) / (graphRangeMax_X - graphRangeMin_X) + gx;
@@ -1867,7 +1944,7 @@ void Graph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, double
   oy = y;
 }
 
-void GraphDefault(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, double w, double h, unsigned int pcolor )
+void GraphDefault(Adafruit_ST7735 &d, double x, double y, double gx, double gy, double w, double h, unsigned int pcolor )
 {
   // recall that ox and oy are initialized as static above
   x =  (x - graphRangeMin_X) * ( w) / (graphRangeMax_X - graphRangeMin_X) + gx;
@@ -1891,7 +1968,7 @@ char* string2char(String command)
     return 0;
 }
 
-void println_Center( Adafruit_ILI9341 &d, String heading, int centerX, int centerY )
+void println_Center( Adafruit_ST7735 &d, String heading, int centerX, int centerY )
 {
     int x = 0;
     int y = 0;
@@ -1925,11 +2002,11 @@ void println_Center( Adafruit_ILI9341 &d, String heading, int centerX, int cente
     // d.println( "Reflow Master - PCB v2018-2, Code v1.03" );
 }
 
-void setFault(Adafruit_ILI9341 &d){
+void setFault(Adafruit_ST7735 &d){
   d.setCursor(45,216);
 }
 
-void println_Right( Adafruit_ILI9341 &d, String heading, int centerX, int centerY )
+void println_Right( Adafruit_ST7735 &d, String heading, int centerX, int centerY )
 {
     int x = 0;
     int y = 0;
@@ -1941,10 +2018,50 @@ void println_Right( Adafruit_ILI9341 &d, String heading, int centerX, int center
     d.println( heading );
 }
 
+void initWiFi(){
 
+}
+
+void initTFT(){
+
+  #ifdef DEBUG
+    Serial.println("TFT Begin...");
+  #endif
+
+    // Start up the TFT and show the boot screen
+    // tft.begin();
+    tft.initR(INITR_144GREENTAB); 
+    tft.setRotation(rotation);
+    // tft.setFont(&FreeMono9pt7b);
+    BootScreen();
+
+  #ifdef DEBUG
+    Serial.println("Booted Spash Screen");
+  #endif
+
+}
+
+void initTC(){
+  // Start up the MAX31855
+  // @todo sanity
+  tc.begin();
+  tc.readError();
+  #ifdef DEBUG
+    Serial.println("Thermocouple Begin...");
+    Serial.println((String)round(tc.readInternal()));
+    Serial.println((String)round(tc.readCelsius()));
+  #endif
+}
 
 void setup()
 {
+
+  // pinMode(TFT_CS,OUTPUT);
+  // digitalWrite(TFT_CS, HIGH);
+  
+  // pinMode(MAXCS,OUTPUT);
+  // digitalWrite(MAXCS, HIGH);
+
   // Setup all GPIO
   // pinMode( BUZZER, OUTPUT );
   pinMode( RELAY, OUTPUT );
@@ -1971,6 +2088,9 @@ void setup()
   Serial.println(ESP.getHeapFragmentation());
   Serial.println(ESP.getMaxFreeBlockSize());
 
+  initTC();  
+  initTFT();  
+
   // just wait a bit before we try to load settings from FLASH
   delay(500);
 
@@ -1990,35 +2110,13 @@ void setup()
   // button1.attachClick(button1Press);
   // button2.attachClick(button2Press);
   // button3.attachClick(button3Press);
-
-#ifdef DEBUG
-  Serial.println("TFT Begin...");
-#endif
-
-  // Start up the TFT and show the boot screen
-  tft.begin();
-  // tft.setFont(&FreeMono9pt7b);
-  BootScreen();
-
-#ifdef DEBUG
-  Serial.println("Booted Spash Screen");
-#endif
-
-// Start up the MAX31855
-// @todo sanity
-tc.begin();
-tc.read();
-#ifdef DEBUG
-  Serial.println("Thermocouple Begin...");
-  Serial.println((String)round(tc.getInternal()));
-  Serial.println((String)round(tc.getTemperature()));
-#endif
+  
+// digitalWrite(TFT_CS,HIGH);
 
   // delay for initial temp probe read to be garbage
   delay(500);
   state = 0;
 }
-
 
 void loop(){
   doLoop();
@@ -2028,10 +2126,49 @@ int round_f(float x){
   return (int)round(x);
 }
 
+float round_f_2(float x){
+  return round(x);
+}
+
 void doWake(){
 }
 
 void doAbort(){
+}
+
+void testTC(){
+      ReadCurrentTemp();
+      if ( nextTempRead < millis() )
+      {
+        maxT = minT = currentTemp;
+        nextTempRead = millis() + tempSampleRate;
+      }
+      // tft.fillScreen(BLACK);
+      // Serial.println("loop testTC");
+      Serial.println((String)currentTemp);
+      if ( currentTemp > 0 )
+      {
+        Serial.println("deviation: " + (String)(maxT-minT));
+        // color code temperature
+        if(currentTemp > hotTemp) tft.setTextColor( RED, BLACK );
+        else if(currentTemp < coolTemp) tft.setTextColor( GREEN, BLACK );
+        else tft.setTextColor( YELLOW, BLACK );
+
+        tft.setTextSize(2);
+        // println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
+        println_Center( tft, "  "+String( ( currentTemp ) )+"c",tft.width() / 2 - 20, ( tft.height() / 2 ) );
+        tft.setTextSize(1);
+        println_Center( tft,"+/-" + (String)(maxT-minT), tft.width() / 2, ( tft.height() / 2 ) + 30 );
+      }
+      else{
+        tft.setTextSize(textsize_1);
+        tft.setTextColor( RED, BLACK );
+        println_Center( tft, "error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) + 10 );
+      }
+    if(currentTemp>maxT) maxT = currentTemp;
+    if(currentTemp<minT) minT = currentTemp;
+    Serial.println(minT);
+    Serial.println(maxT);
 }
 
 // any button press handler
@@ -2078,3 +2215,23 @@ typedef enum {
     DEBUG_DEV       = 3,
     DEBUG_MAX       = 4
 } wm_debuglevel_t;
+
+
+void debugPin(uint8_t pin){
+    Serial.print("pinmode: ");
+    Serial.println(getPinMode(pin),HEX);
+    Serial.println("pinstate: " + (String)digitalRead(pin));  
+}
+
+int getPinMode(uint8_t pin)
+{
+  if (pin >= NUM_DIGITAL_PINS) return (-1);
+
+  uint8_t bit = digitalPinToBitMask(pin);
+  uint32_t port = digitalPinToPort(pin);
+  volatile uint32_t *reg = portModeRegister(port);
+  if (*reg & bit) return (OUTPUT); // 0x01
+
+  volatile uint32_t *out = portOutputRegister(port);
+  return ((*out & bit) ? INPUT_PULLUP : INPUT); // 0x00
+}
