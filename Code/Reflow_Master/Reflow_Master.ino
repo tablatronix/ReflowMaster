@@ -35,6 +35,7 @@ HISTORY:
 #include "Adafruit_GFX.h" // Library Manager
 // #include "Adafruit_ILI9341.h" // Library Manager
 #include <Adafruit_ST7735.h> // Hardware-specific library for ST7735
+#include <Adafruit_ST7789.h> // Hardware-specific library for ST7735
 
 // #include "MAX31855.h" // by Rob Tillaart Library Manager
 #include "Adafruit_MAX31855.h"
@@ -57,18 +58,26 @@ HISTORY:
 // #define TFT_RESET 1
 
 // @TODO use CS and get tft and max31855 working with hspi pins
-#define TFT_DC    D1 // D1
+#define TFT_DC    D4 // D1
 #define TFT_CS    D8 // D2
-#define TFT_RST   D0
+#define TFT_RST   D3 // ST7789 CS low, D2 not working
 // Initialise the TFT screen
 // Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RESET);
-Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
+// Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
+// Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 
-// #nodemcu hspi
-// scl      D5 14
-// mosi/sda D7 13
-// miso     D6 12
-// cs       D8 15
+using RM_tft = Adafruit_ST7789;
+// using RM_tft = Adafruit_ST7735;
+RM_tft tft = RM_tft(TFT_CS, TFT_DC, TFT_RST);
+
+// NODEMCU hspi
+// HW scl      D5 14
+// HW mosi/sda D7 13
+// HW miso     D6 12
+// HW cs       D8 15
+// 
+// ESPLED      D4 02
+// boardLED    D0 16
 
 
 // MAX 31855 Pins
@@ -76,11 +85,11 @@ Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 // #define MAXCS   13
 // #define MAXCLK  12
 
-#define MAXDO   D6 // 0
-#define MAXCS   D4 // 2
-#define MAXCLK  D5 // 16
-Adafruit_MAX31855 tc(MAXCS);
-// Adafruit_MAX31855 tc(MAXCLK, MAXCS, MAXDO);
+#define MAXDO   5 // HWMISO
+#define MAXCS   D0 // 2
+#define MAXCLK  4 // HWSLK
+// Adafruit_MAX31855 tc(MAXCS);
+Adafruit_MAX31855 tc(MAXCLK, MAXCS, MAXDO);
 // Initialise the MAX31855 IC for thermocouple tempterature reading
 // MAX31855 tc(MAXCLK, MAXCS, MAXDO);
 
@@ -164,7 +173,7 @@ unsigned long nextTempRead;
 unsigned long nextTempAvgRead;
 int avgReadCount = 0; // running avg
 int avgSamples = 10; // 1 to disable averaging
-int tempSampleRate = 10000; // how often to sample temperature when idle
+int tempSampleRate = 2000; // how often to sample temperature when idle
 
 int hotTemp  = 80; // C burn temperature for HOT indication, 0=disable
 int coolTemp = 50; // C burn temperature for HOT indication, 0=disable
@@ -175,6 +184,7 @@ double timeX = 0;
 byte state; // 0 = ready, 1 = warmup, 2 = reflow, 3 = finished, 10 Menu, 11+ settings
 byte state_settings = 0;
 byte settings_pointer = 0;
+byte stateStart = 10;
 
 // Initialise an array to hold 4 profiles
 // Increase this array if you plan to add more
@@ -208,7 +218,7 @@ int buzzerCount = 5;
 bool tcWarn = false; // stop and show error if a tc issue is detected
 bool skipWarmup = false;
 bool settingWarn = false;
-bool useInternal = true;
+bool useInternal = false;
 
 // Graph Size for UI
 int graphRangeMin_X = 0;
@@ -371,8 +381,9 @@ void checkButtonAnalog(){
   int button1 = 195;
   int button2 = 625;
   int button3 = 820; // 1+2
+  int buttonmax = 1024;
 
-  button0 = 110;
+  button0 = 32;
   button1 = 170;
   button2 = 550;
   button3 = 733; // 1+2
@@ -387,6 +398,7 @@ void checkButtonAnalog(){
   else if(level > button1-th && level < button1+th) button1Press();
   else if(level > button2-th && level < button2+th) button2Press();
   else if(level > button3-th && level < button3+th) button3Press();
+  else if(level > buttonmax-th && level < buttonmax+th) button0Press();
   else return;
 }
 
@@ -461,9 +473,10 @@ void doLoop()
     SetCurrentGraph( set.paste ); // this causes the bug, 
     // Show the main menu
     ShowMenu();
-    delay(1000);
-    tft.fillScreen(BLACK);
-    state = 20;
+    // delay(1000);
+    // state = 20;
+    // tft.fillScreen(BLACK);
+    // state = stateStart;
     Serial.println("back in loop");
   }
   else if ( state == 1 ) // WARMUP - We sit here until the probe reaches the starting temp for the profile
@@ -508,8 +521,6 @@ void doLoop()
   }
   else if ( state == 10 ) // MENU
   {
-    testTC();
-    return;
     if ( nextTempRead < millis() )
     {
       Serial.println("loop menu");
@@ -809,12 +820,6 @@ void ReadCurrentTempAvg()
 // Read the temp probe
 void ReadCurrentTemp()
 {
-  // pinMode(MAXDO, INPUT); // Data mode
-  // digitalWrite(MAXDO, HIGH); // Data mode
-  // pinMode(MAXCLK, OUTPUT); // Data mode
-  // digitalWrite(MAXCLK, HIGH); // Data mode
-
-  // delay(1000);
   int status = tc.readError();
   #ifdef DEBUG
   Serial.print(" status: ");
@@ -823,15 +828,6 @@ void ReadCurrentTemp()
   float internal = tc.readInternal();
   if(useInternal) currentTemp = internal + set.tempOffset;
   else currentTemp = tc.readCelsius() + set.tempOffset;
-  // delay(1000);
-      // pinMode(TFT_CS, OUTPUT);
-    // digitalWrite(TFT_CS, HIGH); // Deselect
-    // pinMode(TFT_DC, OUTPUT);
-    // digitalWrite(TFT_DC, HIGH); // Data mode
-
-  // tft.initR(INITR_144GREENTAB);
-  // tft.setRotation(rotation);
-    // digitalWrite(MAXCLK, LOW); // Data mode
 
 }
 
@@ -985,7 +981,7 @@ void StartFan ( bool start )
 
 void DrawHeading( String lbl, unsigned int acolor, unsigned int bcolor )
 {
-    tft.setTextSize(textsize_4);
+    tft.setTextSize(textsize_2);
     tft.setTextColor(acolor , bcolor);
     tft.setCursor(0,0);
     tft.fillRect( 0, 0, 220, 40, BLACK );
@@ -1850,7 +1846,7 @@ void button3Press()
  * https://www.youtube.com/watch?v=YejRbIKe6e0
  */
 
-void SetupGraph(Adafruit_ST7735 &d, double x, double y, double gx, double gy, double w, double h, double xlo, double xhi, double xinc, double ylo, double yhi, double yinc, String title, String xlabel, String ylabel, unsigned int gcolor, unsigned int acolor, unsigned int tcolor, unsigned int bcolor )
+void SetupGraph(RM_tft &d, double x, double y, double gx, double gy, double w, double h, double xlo, double xhi, double xinc, double ylo, double yhi, double yinc, String title, String xlabel, String ylabel, unsigned int gcolor, unsigned int acolor, unsigned int tcolor, unsigned int bcolor )
 {
   double ydiv, xdiv;
   double i;
@@ -1924,7 +1920,7 @@ void SetupGraph(Adafruit_ST7735 &d, double x, double y, double gx, double gy, do
     delay(0);
 }
 
-void Graph(Adafruit_ST7735 &d, double x, double y, double gx, double gy, double w, double h )
+void Graph(RM_tft &d, double x, double y, double gx, double gy, double w, double h )
 {
   // recall that ox and oy are initialized as static above
   x =  (x - graphRangeMin_X) * ( w) / (graphRangeMax_X - graphRangeMin_X) + gx;
@@ -1944,7 +1940,7 @@ void Graph(Adafruit_ST7735 &d, double x, double y, double gx, double gy, double 
   oy = y;
 }
 
-void GraphDefault(Adafruit_ST7735 &d, double x, double y, double gx, double gy, double w, double h, unsigned int pcolor )
+void GraphDefault(RM_tft &d, double x, double y, double gx, double gy, double w, double h, unsigned int pcolor )
 {
   // recall that ox and oy are initialized as static above
   x =  (x - graphRangeMin_X) * ( w) / (graphRangeMax_X - graphRangeMin_X) + gx;
@@ -1968,7 +1964,7 @@ char* string2char(String command)
     return 0;
 }
 
-void println_Center( Adafruit_ST7735 &d, String heading, int centerX, int centerY )
+void println_Center( RM_tft &d, String heading, int centerX, int centerY )
 {
     int x = 0;
     int y = 0;
@@ -2002,11 +1998,11 @@ void println_Center( Adafruit_ST7735 &d, String heading, int centerX, int center
     // d.println( "Reflow Master - PCB v2018-2, Code v1.03" );
 }
 
-void setFault(Adafruit_ST7735 &d){
+void setFault(RM_tft &d){
   d.setCursor(45,216);
 }
 
-void println_Right( Adafruit_ST7735 &d, String heading, int centerX, int centerY )
+void println_Right( RM_tft &d, String heading, int centerX, int centerY )
 {
     int x = 0;
     int y = 0;
@@ -2022,6 +2018,15 @@ void initWiFi(){
 
 }
 
+void initDisplay(){
+    // tft.begin();
+    // tft.initR(INITR_144GREENTAB); 
+    tft.init(240, 240, SPI_MODE3);           // Init ST7789 240x240
+    // SPI.setDataMode(SPI_MODE2);
+
+    tft.setRotation(rotation);
+    // tft.setFont(&FreeMono9pt7b);
+}
 void initTFT(){
 
   #ifdef DEBUG
@@ -2030,9 +2035,11 @@ void initTFT(){
 
     // Start up the TFT and show the boot screen
     // tft.begin();
-    tft.initR(INITR_144GREENTAB); 
+    // tft.initR(INITR_144GREENTAB); 
+    tft.init(240, 240, SPI_MODE3);           // Init ST7789 240x240
     tft.setRotation(rotation);
     // tft.setFont(&FreeMono9pt7b);
+    
     BootScreen();
 
   #ifdef DEBUG
@@ -2088,8 +2095,8 @@ void setup()
   Serial.println(ESP.getHeapFragmentation());
   Serial.println(ESP.getMaxFreeBlockSize());
 
-  initTC();  
   initTFT();  
+  initTC();  
 
   // just wait a bit before we try to load settings from FLASH
   delay(500);
