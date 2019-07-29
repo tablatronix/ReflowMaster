@@ -86,18 +86,18 @@ RM_tft tft = RM_tft(TFT_CS, TFT_DC, TFT_RST);
 // #define MAXCLK  12
 
 #define MAXDO   5 // HWMISO
-#define MAXCS   D0 // 2
+#define MAXCS   D1 // 2
 #define MAXCLK  4 // HWSLK
-// Adafruit_MAX31855 tc(MAXCS);
-Adafruit_MAX31855 tc(MAXCLK, MAXCS, MAXDO);
+Adafruit_MAX31855 tc(MAXCS);
+// Adafruit_MAX31855 tc(MAXCLK, MAXCS, MAXDO);
 // Initialise the MAX31855 IC for thermocouple tempterature reading
 // MAX31855 tc(MAXCLK, MAXCS, MAXDO);
 
 uint16_t rotation = 3;
 
 uint16_t textsize_1 = 1;
-uint16_t textsize_2 = 1;
-uint16_t textsize_3 = 1;
+uint16_t textsize_2 = 2;
+uint16_t textsize_3 = 3;
 uint16_t textsize_4 = 4;
 uint16_t textsize_5 = 5;
 
@@ -173,7 +173,7 @@ unsigned long nextTempRead;
 unsigned long nextTempAvgRead;
 int avgReadCount = 0; // running avg
 int avgSamples = 10; // 1 to disable averaging
-int tempSampleRate = 2000; // how often to sample temperature when idle
+int tempSampleRate = 200; // how often to sample temperature when idle
 
 int hotTemp  = 80; // C burn temperature for HOT indication, 0=disable
 int coolTemp = 50; // C burn temperature for HOT indication, 0=disable
@@ -230,6 +230,13 @@ int graphRangeStep_Y = 15;
 
 float maxT;
 float minT;
+
+
+// grapher
+int16_t graph_w = 240;
+int16_t graph_h = 240;
+int graphOff_x = 240-30;
+int graphOff_y = 240-20;
 
 // Create a spline reference for converting profile values to a spline for the graph
 Spline baseCurve;
@@ -376,7 +383,7 @@ void checkButtonAnalog(){
   int level = analogRead(A0);
   int th = 15;
   int base = 30; // base noise
-  int debounce = 300; //ms
+  int debounce = 100; //ms
   int button0 = 65;
   int button1 = 195;
   int button2 = 625;
@@ -387,12 +394,17 @@ void checkButtonAnalog(){
   button1 = 170;
   button2 = 550;
   button3 = 733; // 1+2
-   
+
+  button0 = 226;
+  button1 = 438;
+  button2 = 643;
+  button3 = 856; // 1+2
+
   if(level > base){
     Serial.println("BUTTON PRESS level:" + (String)level);
     delay(debounce);
-    if(level < base) return; // deboune
-    delay(100); // a button was pressed delay for multi touch
+    if(level < base) return; // debounce
+    // delay(100); // a button was pressed delay for multi touch
   }
        if(level > button0-th && level < button0+th) button0Press();
   else if(level > button1-th && level < button1+th) button1Press();
@@ -536,14 +548,14 @@ void doLoop()
         else if(currentTemp < coolTemp) tft.setTextColor( GREEN, BLACK );
         else tft.setTextColor( YELLOW, BLACK );
 
-        tft.setTextSize(textsize_1);
+        tft.setTextSize(textsize_2);
         int third = tft.width()/4;
         // println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
         println_Center( tft, "  "+String( ( currentTemp ) )+"c  +/-" + (String)(maxT-minT), tft.width() / 2, ( tft.height() / 2 ) + 10 );
         maxT = minT = currentTemp;
       }
       else{
-        tft.setTextSize(textsize_1);
+        tft.setTextSize(textsize_2);
         tft.setTextColor( RED, BLACK );
         println_Center( tft, "error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) + 10 );
       }
@@ -698,7 +710,7 @@ void doLoop()
         }
         else 
         {
-          Graph(tft, timeX, currentTemp, 30, 220, 270, 180 );
+          Graph(tft, timeX, currentTemp, 30, 220, 270, 180 ); // graph points same dimensions
 
           if ( timeX < CurrentGraph().fanTime )
           {
@@ -981,7 +993,7 @@ void StartFan ( bool start )
 
 void DrawHeading( String lbl, unsigned int acolor, unsigned int bcolor )
 {
-    tft.setTextSize(textsize_2);
+    tft.setTextSize(textsize_3);
     tft.setTextColor(acolor , bcolor);
     tft.setCursor(0,0);
     tft.fillRect( 0, 0, 220, 40, BLACK );
@@ -1390,7 +1402,7 @@ void StartReflow()
    ShowMenuOptions( true );
   
   timeX = 0;
-  SetupGraph(tft, 0, 0, 30, 220, 270, 180, graphRangeMin_X, graphRangeMax_X, graphRangeStep_X, graphRangeMin_Y, graphRangeMax_Y, graphRangeStep_Y, "Reflow Temp", " Time (s)", "deg (C)", grid_color, axis_color, axis_text, BLACK );
+  SetupGraph(tft, 0, 0, 60, 230, 150, 150, graphRangeMin_X, graphRangeMax_X, graphRangeStep_X, graphRangeMin_Y, graphRangeMax_Y, graphRangeStep_Y, "Reflow Temp", " Time (s)", "deg (C)", grid_color, axis_color, axis_text, BLACK );
   
   DrawHeading( "READY", WHITE, BLACK );
   DrawBaseGraph();
@@ -1798,7 +1810,7 @@ void button2Press()
   {
     nextButtonPress = millis() + 20;
     Buzzer( 2000, 50 );
-
+    if(state == 10) state = 20;
     if ( state == 11 )
     {
       settings_pointer = constrain( settings_pointer -1, 0, 6 );
@@ -1840,11 +1852,50 @@ void button3Press()
   }
 }
 
+
 /*
  * Graph drawing code here
  * Special thanks to Kris Kasprzak for his free graphing code that I derived mine from
  * https://www.youtube.com/watch?v=YejRbIKe6e0
  */
+
+/*
+
+  function to draw a cartesian coordinate system and plot whatever data you want
+  just pass x and y and the graph will be drawn
+
+  huge arguement list
+  &d name of your display object
+  x = x data point
+  y = y datapont
+  gx = x graph location (lower left)
+  gy = y graph location (lower left)
+  w = width of graph
+  h = height of graph
+  xlo = lower bound of x axis
+  xhi = upper bound of x asis
+  xinc = division of x axis (distance not count)
+  ylo = lower bound of y axis
+  yhi = upper bound of y asis
+  yinc = division of y axis (distance not count)
+  title = title of graph
+  xlabel = x asis label
+  ylabel = y asis label
+  gcolor = graph line colors
+  acolor = axi ine colors
+  pcolor = color of your plotted data
+  tcolor = text color
+  bcolor = background color
+  &redraw = flag to redraw graph on fist call only
+*/
+
+// Set width and value size, so user does not have to use offsets to width and offset
+// 
+
+int graphW = 240;
+int graphH = 240; //-headerheight
+int labelXW = 30;
+int labelYH = 10;
 
 void SetupGraph(RM_tft &d, double x, double y, double gx, double gy, double w, double h, double xlo, double xhi, double xinc, double ylo, double yhi, double yinc, String title, String xlabel, String ylabel, unsigned int gcolor, unsigned int acolor, unsigned int tcolor, unsigned int bcolor )
 {
@@ -1870,7 +1921,7 @@ void SetupGraph(RM_tft &d, double x, double y, double gx, double gy, double w, d
 
       d.setTextSize(textsize_1);
       d.setTextColor(tcolor, bcolor);
-      d.setCursor(gx-25, temp);
+      d.setCursor(gx-25, temp); // margin left + pading
       println_Right( d, String(round_f(i)), gx-25, temp );
       delay(0);
     }
@@ -1890,7 +1941,7 @@ void SetupGraph(RM_tft &d, double x, double y, double gx, double gy, double w, d
 
       d.setTextSize(textsize_1);
       d.setTextColor(tcolor, bcolor);
-      d.setCursor(temp, gy + 10);
+      d.setCursor(temp, gy + 10); // margin bottom + padding
 
       if ( i <= xhi - xinc )
         println_Center(d, String(round_f(i)), temp, gy + 10 );
@@ -1903,15 +1954,15 @@ void SetupGraph(RM_tft &d, double x, double y, double gx, double gy, double w, d
     //now draw the labels
     d.setTextSize(textsize_2);
     d.setTextColor(tcolor, bcolor);
-    d.setCursor(gx , gy - h - 30);
+    d.setCursor(gx , gy - h - 30); // y axis label
     d.println(title);
 
     d.setTextSize(textsize_1);
     d.setTextColor(acolor, bcolor);
-    d.setCursor(w - 25 , gy - 10);
+    d.setCursor(w - 25 , gy - 10); // x axis label
     d.println(xlabel);
 
-    tft.setRotation(rotation-1);
+    tft.setRotation(rotation-1); // fix this proper
     d.setTextSize(textsize_1);
     d.setTextColor(acolor, bcolor);
     d.setCursor(w - 116, 34 );
@@ -1929,9 +1980,9 @@ void Graph(RM_tft &d, double x, double y, double gx, double gy, double w, double
   if ( timeX < 2 )
     oy = min( oy, y );
     
-  y = min( (int)y, 220 ); // bottom of graph!
+  y = min( (int)y, 220 ); // bottom of graph
 
-//  d.fillRect( ox-1, oy-1, 3, 3, currentPlotColor );
+ d.fillRect( ox-1, oy-1, 3, 3, currentPlotColor );
 
   d.drawLine(ox, oy + 1, x, y + 1, currentPlotColor);
   d.drawLine(ox, oy - 1, x, y - 1, currentPlotColor);
@@ -2182,6 +2233,7 @@ void testTC(){
 // if sleeping wake up
 // if reflow any button abort
 bool anyButton(){
+  return false;
   bool sleep = false;
   if(state == 1 || state == 2 || state == 15){
     doAbort();
