@@ -89,6 +89,9 @@ RM_tft tft = RM_tft(TFT_CS, TFT_DC, TFT_RST);
 #define MAXCS   D1 // 2
 #define MAXCLK  4 // HWSLK
 Adafruit_MAX31855 tc(MAXCS);
+
+Adafruit_MAX31855 tcB(D0);
+
 // Adafruit_MAX31855 tc(MAXCLK, MAXCS, MAXDO);
 // Initialise the MAX31855 IC for thermocouple tempterature reading
 // MAX31855 tc(MAXCLK, MAXCS, MAXDO);
@@ -168,7 +171,6 @@ typedef struct {
   bool startFullBlast = false;
 } Settings;
 
-const String ver = "1.03";
 const String ver = "1.03_bboy";
 bool newSettings = false;
 
@@ -176,7 +178,7 @@ unsigned long nextTempRead;
 unsigned long nextTempAvgRead;
 int avgReadCount = 0; // running avg
 int avgSamples = 10; // 1 to disable averaging
-int tempSampleRate = 200; // how often to sample temperature when idle
+int tempSampleRate = 1000; // how often to sample temperature when idle
 
 int hotTemp  = 80; // C burn temperature for HOT indication, 0=disable
 int coolTemp = 50; // C burn temperature for HOT indication, 0=disable
@@ -208,6 +210,7 @@ float calibrationRiseVal = 0;
 // Runtime reflow variables
 float currentDuty = 0;
 float currentTemp = 0;
+float currentTempB = 0; // alt thermocouple
 float currentTempAvg = 0;
 float lastTemp = -1;
 float currentDetla = 0;
@@ -398,10 +401,10 @@ void checkButtonAnalog(){
   button2 = 550;
   button3 = 733; // 1+2
 
-  button0 = 226;
-  button1 = 438;
-  button2 = 643;
-  button3 = 856; // 1+2
+  button0 = 226-20;
+  button1 = 438-20;
+  button2 = 643-20;
+  button3 = 856-20; // 1+2
 
   if(level > base){
     Serial.println("BUTTON PRESS level:" + (String)level);
@@ -451,9 +454,21 @@ void safetyCheck(){
 #define STATUS_SHORT_TO_GND     0x02
 #define STATUS_SHORT_TO_VCC     0x04
 #define STATUS_NOREAD           0x80
+
 String getTcStatus(){
   // tc.read();
   uint8_t tcStatus = tc.readError();
+  if(tcStatus == STATUS_OK) return "OK";
+  else if(tcStatus == STATUS_OPEN_CIRCUIT) return "Open";
+  else if(tcStatus == STATUS_SHORT_TO_GND) return "GND Short";
+  else if(tcStatus == STATUS_SHORT_TO_VCC) return "VCC Short";
+  else if(tcStatus == STATUS_NOREAD) return "Read Failed";
+  else return "ERROR";
+}
+
+String getTcStatusB(){
+  // tc.read();
+  uint8_t tcStatus = tcB.readError();
   if(tcStatus == STATUS_OK) return "OK";
   else if(tcStatus == STATUS_OPEN_CIRCUIT) return "Open";
   else if(tcStatus == STATUS_SHORT_TO_GND) return "GND Short";
@@ -542,25 +557,30 @@ void doLoop()
       nextTempRead = millis() + tempSampleRate;
       // We show the current probe temp in the men screen just for info
       ReadCurrentTemp();
+      ReadCurrentTempB();
       Serial.println((String)currentTemp);
+      Serial.println((String)currentTempB);
       if ( currentTemp > 0 )
       {
         Serial.println("deviation: " + (String)(maxT-minT));
         // color code temperature
-        if(currentTemp > hotTemp) tft.setTextColor( RED, BLACK );
-        else if(currentTemp < coolTemp) tft.setTextColor( GREEN, BLACK );
-        else tft.setTextColor( YELLOW, BLACK );
+        if(currentTemp > hotTemp) tft.setTextColor( ORANGE, BLACK ); // hottemp color
+        else if(currentTemp < coolTemp) tft.setTextColor( GREEN, BLACK ); // cooltemp color
+        else tft.setTextColor( YELLOW, BLACK ); // caution color
 
         tft.setTextSize(textsize_2);
         int third = tft.width()/4;
         // println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
         println_Center( tft, "  "+String( ( currentTemp ) )+"c  +/-" + (String)(maxT-minT), tft.width() / 2, ( tft.height() / 2 ) + 10 );
+        if(currentTempB > 0) println_Center( tft, "  "+String( ( currentTempB ) )+"c", tft.width() / 2, ( tft.height() / 2 ) + 30 );
+        else println_Center( tft, "errorB " + getTcStatusB(),tft.width() / 2,( tft.height() / 2 ) + 30 );
         maxT = minT = currentTemp;
       }
       else{
         tft.setTextSize(textsize_2);
         tft.setTextColor( RED, BLACK );
-        println_Center( tft, "error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) + 10 );
+        println_Center( tft, "error " + getTcStatus(),tft.width() / 2,( tft.height() / 2 ) + 10 );
+        // println_Center( tft, "error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) + 10 );
       }
     }
     ReadCurrentTemp();
@@ -837,13 +857,25 @@ void ReadCurrentTemp()
 {
   int status = tc.readError();
   #ifdef DEBUG
-  Serial.print(" status: ");
+  Serial.print("tc status: ");
   Serial.println( status );
   #endif
   float internal = tc.readInternal();
   if(useInternal) currentTemp = internal + set.tempOffset;
   else currentTemp = tc.readCelsius() + set.tempOffset;
+}
 
+// Read the temp probe
+void ReadCurrentTempB()
+{
+  int status = tcB.readError();
+  #ifdef DEBUG
+  Serial.print("tc alt status: ");
+  Serial.println( status );
+  #endif
+  float internal = tcB.readInternal();
+  if(useInternal) currentTempB = internal + set.tempOffset;
+  else currentTempB = tcB.readCelsius() + set.tempOffset;
 }
 
 // This is where the magic happens for temperature matching
@@ -1731,7 +1763,6 @@ void button0Press()
         set.lookAhead += 1;
         if ( set.lookAhead > 15 )
           set.lookAhead = 1;
-
         UpdateSettingsLookAhead( 110 );
       }
       else if ( settings_pointer == 4 ) // change temp probe offset
@@ -2135,6 +2166,7 @@ void setup()
   // pinMode( BUTTON3, INPUT );
 
   analogWriteRange(255); // esp8266 
+  analogWriteFreq(120);
   // Turn off the SSR - duty cycle of 0
   SetRelayFrequency( 0 );
 
