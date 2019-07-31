@@ -147,7 +147,9 @@ uint16_t textsize_5 = 5;
 // theme
 #define grid_color DKBLUE
 #define axis_color BLUE
-#define axis_text  WHITE
+#define axis_text_color  WHITE
+#define reflow_trace_color  TEAL
+#define log_trace_color  PINK
 
 #define ButtonCol1 GREEN
 #define ButtonCol2 RED
@@ -167,6 +169,7 @@ typedef struct {
 } Settings;
 
 const String ver = "1.03";
+const String ver = "1.03_bboy";
 bool newSettings = false;
 
 unsigned long nextTempRead;
@@ -233,9 +236,9 @@ float minT;
 
 
 // grapher
-int16_t graph_w = 240;
-int16_t graph_h = 240;
-int graphOff_x = 240-30;
+int16_t graph_w = 240-30;
+int16_t graph_h = 240-60;
+int graphOff_x = 30;
 int graphOff_y = 240-20;
 
 // Create a spline reference for converting profile values to a spline for the graph
@@ -710,7 +713,7 @@ void doLoop()
         }
         else 
         {
-          Graph(tft, timeX, currentTemp, 30, 220, 270, 180 ); // graph points same dimensions
+          Graph(tft, timeX, currentTemp, graphOff_x, graphOff_y, graph_w, graph_h ); // reflow - graph points same dimensions
 
           if ( timeX < CurrentGraph().fanTime )
           {
@@ -1017,7 +1020,7 @@ void DrawBaseGraph()
   
   for( int ii = 0; ii <= graphRangeMax_X; ii+= 5 )
   {
-    GraphDefault(tft, ii, CurrentGraph().wantedCurve[ii], 30, 220, 270, 180, PINK );
+    GraphDefault(tft, ii, CurrentGraph().wantedCurve[ii], graphOff_x, graphOff_y, graph_w, graph_h, PINK ); // graph reflow curve
     delay(0);
   }
 
@@ -1402,10 +1405,11 @@ void StartReflow()
    ShowMenuOptions( true );
   
   timeX = 0;
-  SetupGraph(tft, 0, 0, 60, 230, 150, 150, graphRangeMin_X, graphRangeMax_X, graphRangeStep_X, graphRangeMin_Y, graphRangeMax_Y, graphRangeStep_Y, "Reflow Temp", " Time (s)", "deg (C)", grid_color, axis_color, axis_text, BLACK );
+  // draw grapher
+  SetupGraph(tft, 0, 0, graphOff_x, graphOff_y, graph_w, graph_h, graphRangeMin_X, graphRangeMax_X, graphRangeStep_X, graphRangeMin_Y, graphRangeMax_Y, graphRangeStep_Y, "Reflow Temp", " Time (s)", "deg (C)", grid_color, axis_color, axis_text_color, BLACK );
   
   DrawHeading( "READY", WHITE, BLACK );
-  DrawBaseGraph();
+  DrawBaseGraph(); // draw reflow graph
 }
 
 void AbortReflow()
