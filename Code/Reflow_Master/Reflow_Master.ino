@@ -51,6 +51,7 @@ HISTORY:
 
 // used to show or hide serial debug output
 #define DEBUG
+#define TRACELOG
 
 // TFT SPI pins
 // #define TFT_DC 0
@@ -166,7 +167,7 @@ typedef struct {
   byte paste = 0;
   float power = 1;
   int lookAhead = 12;
-  int lookAheadWarm = 1;
+  int lookAheadWarm = 12;
   int tempOffset = 0;
   bool startFullBlast = false;
 } Settings;
@@ -177,14 +178,17 @@ bool newSettings = false;
 unsigned long nextTempRead;
 unsigned long nextTempAvgRead;
 int avgReadCount = 0; // running avg
-int avgSamples = 10; // 1 to disable averaging
+int avgSamples = 6; // 1 to disable averaging
 int tempSampleRate = 1000; // how often to sample temperature when idle
 
 int hotTemp  = 80; // C burn temperature for HOT indication, 0=disable
 int coolTemp = 50; // C burn temperature for HOT indication, 0=disable
-int shutDownTemp = 230; // degrees C
+int shutDownTemp = 210; // degrees C
 
 double timeX = 0;
+unsigned long nextTimeX = 0;
+int timescale = 1000;
+// int timescale = 60*1000;
 
 byte state; // 0 = ready, 1 = warmup, 2 = reflow, 3 = finished, 10 Menu, 11+ settings
 byte state_settings = 0;
@@ -193,7 +197,7 @@ byte stateStart = 10;
 
 // Initialise an array to hold 4 profiles
 // Increase this array if you plan to add more
-ReflowGraph solderPaste[4];
+ReflowGraph solderPaste[5];
 // Index into the current profile
 int currentGraphIndex = 0;
 
@@ -240,7 +244,7 @@ float minT;
 
 // grapher
 int16_t graph_w = 240-30;
-int16_t graph_h = 240-60;
+int16_t graph_h = 240-80; // @todo add overhead to height max to allow for graphing overshoot
 int graphOff_x = 30;
 int graphOff_y = 240-20;
 
@@ -275,7 +279,7 @@ void LoadPaste()
       Profile graph Y values - temperature
       Length of the graph  ( int, how long if the graph array )
       Fan kick in time if using a fan ( int, seconds )
-      Open door message time ( int, seconds )
+      Open door message time ( int, seconds ) // REFLOW END! OFF TIME!!!
  */
   float baseGraphX[7] = { 1, 90, 180, 210, 240, 270, 300 }; // time
   float baseGraphY[7] = { 27, 90, 130, 138, 165, 138, 27 }; // value
@@ -296,6 +300,11 @@ void LoadPaste()
   float baseGraphY4[7] = { 25, 105, 150, 150, 220, 150, 20 }; // value
 
   solderPaste[3] = ReflowGraph( "DOC SOLDER", "No Clean Sn63/Pb36/Ag2", 187, baseGraphX4, baseGraphY4, ELEMENTS(baseGraphX4), 210, 260 );
+
+  float baseGraphX5[6] = { 1,   90,  100,  160, 170, 200  }; // time
+  float baseGraphY5[6] = { 25, 100, 110, 110, 100, 25 }; // value
+
+  solderPaste[4] = ReflowGraph( "PLA", "Anneal 110C/30min", 110, baseGraphX5, baseGraphY5, ELEMENTS(baseGraphX5), 160, 170 );
 
   //TODO: Think of a better way to initalise these baseGraph arrays to not need unique array creation
 }
@@ -356,11 +365,11 @@ void SetCurrentGraph( int index )
   // float baseGraphY[7] = { 27, 90, 130, 138, 165, 138, 27 }; // value
   // baseCurve.setPoints(baseGraphX, baseGraphY, CurrentGraph().reflowTangents, CurrentGraph().len);
 
-  Serial.println("re interpolate splines");
+  Serial.println("re interpolate splines, rangemax: " + (String)graphRangeMax_X);
   // Re-interpolate data based on spline
   for( int ii = 0; ii <= graphRangeMax_X; ii+= 1 )
   {
-    // Serial.println(solderPaste[ currentGraphIndex ].wantedCurve[ii]);
+    Serial.println(solderPaste[ currentGraphIndex ].wantedCurve[ii]);
     solderPaste[ currentGraphIndex ].wantedCurve[ii] = baseCurve.value(ii);
     delay(0);
   }
@@ -387,7 +396,7 @@ void SetCurrentGraph( int index )
 void checkButtonAnalog(){
   // @todo this will have to be reworked and it is very voltage drop dependant
   int level = analogRead(A0);
-  int th = 15;
+  int th = 100;
   int base = 30; // base noise
   int debounce = 100; //ms
   int button0 = 65;
@@ -401,10 +410,11 @@ void checkButtonAnalog(){
   button2 = 550;
   button3 = 733; // 1+2
 
-  button0 = 226-20;
-  button1 = 438-20;
-  button2 = 643-20;
-  button3 = 856-20; // 1+2
+  // int offset = 30;
+  button0 = 215;
+  button1 = button0+210; // 212
+  button2 = button1+210; // 205
+  button3 = button2+210; // 213
 
   if(level > base){
     Serial.println("BUTTON PRESS level:" + (String)level);
@@ -423,8 +433,8 @@ void checkButtonAnalog(){
 void safetyCheck(){
   // provides some sort of thermal runaway protection,
   // @todo add sanity checking for temperature readings, >0 etc
-  Serial.println("tc status: " + getTcStatus());
-  Serial.println("tc internal: " + (String)tc.readInternal());
+  // Serial.println("tc status: " + getTcStatus());
+  // Serial.println("tc internal: " + (String)tc.readInternal());
 
   if(!tcWarn) return;
   // tc.read(); // @todo we probably do not want to read sensor too often, will need to check lastread timer
@@ -480,7 +490,8 @@ String getTcStatusB(){
 void doLoop()
 {
 
-  // safetyCheck();
+  serialLoop();
+  safetyCheck();
 
   checkButtonAnalog();
   // Used by OneButton to poll for button inputs
@@ -725,7 +736,35 @@ void doLoop()
 
       if ( currentTemp > 0 )
       {
-        timeX++;
+
+        #ifdef TRACELOG 
+        Serial.println(currentTemp);
+        #endif
+
+        bool useTimeXTimer = false;
+        if(useTimeXTimer){
+          // scale timer, update temperature display
+          if(nextTimeX > millis()){
+            float wantedTemp = CurrentGraph().wantedCurve[ (int)timeX+1 ];
+            DrawHeading( "HOLD " + String( round_f( currentTemp ) ) + "/" + String( (int)wantedTemp )+"c", currentPlotColor, BLACK );          
+            // Serial.println("Holding..");
+            #ifdef DEBUG
+                        tft.setCursor( 60, 40 );
+                        tft.setTextSize(textsize_2);
+                        tft.fillRect( 60, 40, 60, 20, BLACK );
+                        tft.println( String( round_f((currentDuty/256) * 100 )) +"%" );
+            #endif
+            return; // HOLD timeX
+          }
+
+          timeX++; // increment timescale
+          if(abs(timeX) >= GetGraphTime(2) && abs(timeX) < GetGraphTime(3)){ // timeX is a float?
+            Serial.println("time scale is now minutes");
+            nextTimeX = millis()+60000;
+          }
+          else nextTimeX = millis()+1000;
+        }
+        else timeX++; // increment timescale
 
         if ( timeX > CurrentGraph().completeTime )
         {
@@ -756,21 +795,23 @@ void doLoop()
 // This is where the SSR is controlled via PWM
 void SetRelayFrequency( int duty )
 {
-  #ifdef DEBUG
-  Serial.println("SetRelayFrequency");
-  #endif
   // calculate the wanted duty based on settings power override
   currentDuty = ((float)duty * set.power );
   currentDuty = constrain( round_f( currentDuty ), 0, 255);
   // currentDuty = 255-currentDuty; // invert
 
+  #ifdef DEBUG
+  // if(duty>0) Serial.println("\n[SetRelayFrequency] " + (String)currentDuty);
+  #endif
   // Write the clamped duty cycle to the RELAY GPIO
   analogWrite( RELAY, currentDuty );
 
-#ifdef DEBUG
-  Serial.print("RELAY Duty Cycle: ");
-  Serial.println( "write: " + (String)currentDuty + " " + String( ( currentDuty / 256.0 ) * 100) + "%" +" Using Power: " + String( round_f( set.power * 100 )) + "%" );
-#endif
+  if(duty==0) return;
+
+  #ifdef DEBUG
+    // Serial.print("RELAY Duty Cycle: ");
+    // Serial.println( "write: " + (String)currentDuty + " " + String( ( currentDuty / 256.0 ) * 100) + "%" +" Using Power: " + String( round_f( set.power * 100 )) + "%" );
+  #endif
 }
 
 /*
@@ -843,12 +884,12 @@ void ReadCurrentTempAvg()
   avgReadCount++;
 
   #ifdef DEBUG
-  Serial.print(" avgtot: ");
-  Serial.print( currentTempAvg );
-  Serial.print(" avg count: ");
-  Serial.println( avgReadCount );
-  Serial.print(" avg: ");
-  Serial.println( currentTempAvg/avgReadCount );  
+  // Serial.print(" avgtot: ");
+  // Serial.print( currentTempAvg );
+  // Serial.print(" avg count: ");
+  // Serial.println( avgReadCount );
+  // Serial.print(" avg: ");
+  // Serial.println( currentTempAvg/avgReadCount );  
   #endif  
 }
 
@@ -857,8 +898,8 @@ void ReadCurrentTemp()
 {
   int status = tc.readError();
   #ifdef DEBUG
-  Serial.print("tc status: ");
-  Serial.println( status );
+  // Serial.print("tc status: ");
+  // Serial.println( status );
   #endif
   float internal = tc.readInternal();
   if(useInternal) currentTemp = internal + set.tempOffset;
@@ -891,7 +932,7 @@ void MatchTemp()
   if ( timeX < CurrentGraph().offTime )
   {
     // We are looking XXX steps ahead of the ideal graph to compensate for slow movement of oven temp
-    if ( timeX < CurrentGraph().reflowGraphX[2] )
+    if ( timeX < CurrentGraph().reflowGraphX[2] ) // this assumes PEAK relow is idx 2 ?
       wantedTemp = CurrentGraph().wantedCurve[ (int)timeX + set.lookAheadWarm ];
     else
       wantedTemp = CurrentGraph().wantedCurve[ (int)timeX + set.lookAhead ];
@@ -902,7 +943,10 @@ void MatchTemp()
     tempDiff = ( currentTemp - lastTemp ); 
     lastTemp = currentTemp;
     
+    // prevent perc less than 1 and negative
     perc = wantedDiff - tempDiff;
+    // perc = constrain(wantedDiff - tempDiff,0,100);
+    if(perc < 1) perc = 0;
 
 #ifdef DEBUG
     Serial.print( "T: " );
@@ -981,11 +1025,11 @@ void MatchTemp()
   
   if ( currentDetla >= 0 )
   {
-      base = 128 + ( currentDetla * 5 );
+      base = 128 + ( currentDetla * 5 ); // 128? swing?
   }
   else if ( currentDetla < 0 )
   {
-      base = 32 + ( currentDetla * 15 );
+      base = 32 + ( currentDetla * 15 ); // 32? swing?
   }
 
   base = constrain( base, 0, 256 );
@@ -993,16 +1037,23 @@ void MatchTemp()
 #ifdef DEBUG
   Serial.print("  Base: ");
   Serial.print( base );
-  Serial.print( " -> " );
+  // Serial.print( " -> " );
 #endif
   
-  duty = base + ( 172 * perc );
+  duty = base + ( 172 * perc ); // 172?
+#ifdef DEBUG
+  Serial.print("  Duty: ");
+  Serial.print( duty );
+  Serial.print( " -> " );
+#endif
+
+  // if(duty<0)duty = 0;
   duty = constrain( duty, 0, 256 );
 
   // override for full blast at start
-  Serial.println("startFullBlast");
-  Serial.println(timeX);
-  Serial.println(CurrentGraph().reflowGraphX[1]);
+  // Serial.println("startFullBlast");
+  // Serial.println(timeX);
+  // Serial.println(CurrentGraph().reflowGraphX[1]);
   // if ( set.startFullBlast && (timeX < CurrentGraph().reflowGraphX[1]) ) duty = 256;
   if ( set.startFullBlast && timeX < CurrentGraph().reflowGraphX[1] && currentTemp < wantedTemp ) duty = 256;
   
@@ -1031,18 +1082,18 @@ void DrawHeading( String lbl, unsigned int acolor, unsigned int bcolor )
     tft.setTextSize(textsize_3);
     tft.setTextColor(acolor , bcolor);
     tft.setCursor(0,0);
-    tft.fillRect( 0, 0, 220, 40, BLACK );
+    tft.fillRect( 0, 0, 130, 30, BLACK );
     tft.println( String(lbl) );
 }
 
 // buzz he buzzer
 void Buzzer( int hertz, int len )
 {
-   tone( BUZZER, hertz, len);
+   // tone( BUZZER, hertz, len); // @todo fix, causes a problem somehow
 }
 
 
-double ox , oy ;
+double ox , oy ; // @todo what are these?
 
 void DrawBaseGraph()
 {
@@ -1409,7 +1460,9 @@ void UpdateSettingsPointer()
   }
 }
 
-
+void ProcessReflow(){
+// @todo move loop process here
+}
 
 void StartWarmup()
 {
@@ -1437,8 +1490,8 @@ void StartReflow()
    ShowMenuOptions( true );
   
   timeX = 0;
-  // draw grapher
-  SetupGraph(tft, 0, 0, graphOff_x, graphOff_y, graph_w, graph_h, graphRangeMin_X, graphRangeMax_X, graphRangeStep_X, graphRangeMin_Y, graphRangeMax_Y, graphRangeStep_Y, "Reflow Temp", " Time (s)", "deg (C)", grid_color, axis_color, axis_text_color, BLACK );
+  // draw grapher, no title
+  SetupGraph(tft, 0, 0, graphOff_x, graphOff_y, graph_w, graph_h, graphRangeMin_X, graphRangeMax_X, graphRangeStep_X, graphRangeMin_Y, graphRangeMax_Y, graphRangeStep_Y, "", " Time (s)", "deg (C)", grid_color, axis_color, axis_text_color, BLACK );
   
   DrawHeading( "READY", WHITE, BLACK );
   DrawBaseGraph(); // draw reflow graph
@@ -1478,15 +1531,16 @@ void EndReflow()
   }
 }
 
+
 void SetDefaults()
 {
   // Default settings values
   set.valid = true;
   set.power = 1;
-  set.paste = 0;
-  set.useFan = false;
-  set.lookAhead = 5;     // look ahead when temp is steady state
-  set.lookAheadWarm = 5; // heat acceleration, lookahead when temp heating
+  set.paste = 4;
+  set.useFan = true;
+  set.lookAhead = 2;
+  set.lookAheadWarm = 2;
   set.startFullBlast = true;
   set.tempOffset = 0;
 }
@@ -2166,7 +2220,7 @@ void setup()
   // pinMode( BUTTON3, INPUT );
 
   analogWriteRange(255); // esp8266 
-  analogWriteFreq(120);
+  analogWriteFreq(120); // min 100hz
   // Turn off the SSR - duty cycle of 0
   SetRelayFrequency( 0 );
 
@@ -2330,3 +2384,116 @@ int getPinMode(uint8_t pin)
   volatile uint32_t *out = portOutputRegister(port);
   return ((*out & bit) ? INPUT_PULLUP : INPUT); // 0x00
 }
+
+
+
+// SERIAL CONSOLE
+#define MAX_NUM_CHARS 16 // maximum number of characters read from the Serial Monitor
+char cmd[MAX_NUM_CHARS];       // char[] to store incoming serial commands
+boolean cmd_complete = false;  // whether the command string is complete
+
+
+/*
+ * Prints a usage menu.
+ */
+const char usageText[] PROGMEM = R"=====(
+Usage:
+m <n> : select mode <n>
+
+b+    : increase brightness
+b-    : decrease brightness
+b <n> : set brightness to <n>
+
+s+    : increase speed
+s-    : decrease speed
+s <n> : set speed to <n>
+
+c 0x007BFF : set color to 0x007BFF
+
+Have a nice day.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+)=====";
+
+void printUsage() {
+  Serial.println((const __FlashStringHelper *)usageText);
+}
+
+void process_command(){
+  if (strncmp(cmd,"b ",2) == 0) {
+    uint32_t arg = (uint32_t)atoi(cmd + 2);
+    Serial.print(F("Set freq to: ") );
+    Serial.println(arg);
+    analogWriteFreq(arg); // confirm ?
+  }
+
+  if (strncmp(cmd,"A ",2) == 0) {
+    uint8_t arg = (uint8_t)atoi(cmd + 2);
+    Serial.print(F("Abort") );
+    Serial.println(arg);
+    AbortReflow();
+  }
+
+  if (strncmp(cmd,"R ",2) == 0) {
+    uint8_t arg = (uint8_t)atoi(cmd + 2);
+    Serial.print(F("REFLOW") );
+    Serial.println(arg);
+    StartReflow();
+  }
+
+  cmd[0] = '\0';         // reset the commandstring
+  cmd_complete = false;  // reset command complete 
+}
+
+
+  void recvChar(void) {
+  static byte index = 0;
+  while (Serial.available() > 0 && cmd_complete == false) {
+    char rc = Serial.read();
+    if (rc != '\n') {
+      if(index < MAX_NUM_CHARS) cmd[index++] = rc;
+    } else {
+      cmd[index] = '\0'; // terminate the string
+      index = 0;
+      cmd_complete = true;
+      Serial.print("received '"); Serial.print(cmd); Serial.println("'");
+    }
+  }
+}
+
+void serialLoop(){
+  recvChar(); // read serial comm
+  if(cmd_complete) {
+    process_command();
+  }
+}
+
+// analogWrite is limited to 100hz-40000 because of clamps on analogWriteFreq
+// int startWaveform(uint8_t pin, uint32_t timeHighUS, uint32_t timeLowUS, uint32_t runTimeUS) {
+
+// extern void analogWriteAnything(uint8_t pin, int val) {
+//   if (pin > 16) {
+//     return;
+//   }
+//   uint32_t analogPeriod = 1000000L / 6;
+//   if (val < 0) {
+//     val = 0;
+//   } else if (val > analogScale) {
+//     val = analogScale;
+//   }
+
+//   analogMap &= ~(1 << pin);
+//   uint32_t high = (analogPeriod * val) / analogScale;
+//   uint32_t low = analogPeriod - high;
+//   pinMode(pin, OUTPUT);
+//   if (low == 0) {
+//     stopWaveform(pin);
+//     digitalWrite(pin, HIGH);
+//   } else if (high == 0) {
+//     stopWaveform(pin);
+//     digitalWrite(pin, LOW);
+//   } else {
+//     if (startWaveform(pin, high, low, 0)) {
+//       analogMap |= (1 << pin);
+//     }
+//   }
+// }

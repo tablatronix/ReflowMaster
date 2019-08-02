@@ -48,7 +48,7 @@ HISTORY:
       float reflowGraphX[10];
       float reflowGraphY[10];
       float reflowTangents[10] { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
-      float wantedCurve[350];
+      float wantedCurve[480];
       int len = -1;
       int fanTime = -1;
       int offTime = -1;
