@@ -1140,7 +1140,7 @@ void ShowMenu()
   #ifdef DEBUG
     Serial.println("TFT Show Menu");
   #endif  
-  tft.fillScreen(ST77XX_BLACK);
+  tft.fillScreen(BLACK);
   Serial.println("clear display");
   
   tft.setTextColor( WHITE, BLACK );
