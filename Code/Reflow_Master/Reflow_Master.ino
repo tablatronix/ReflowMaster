@@ -67,8 +67,8 @@ HISTORY:
 // Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 // Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 
-using RM_tft = Adafruit_ST7789;
-// using RM_tft = Adafruit_ST7735;
+// using RM_tft = Adafruit_ST7789;
+using RM_tft = Adafruit_ST7735;
 RM_tft tft = RM_tft(TFT_CS, TFT_DC, TFT_RST);
 
 // NODEMCU hspi
@@ -2158,15 +2158,6 @@ void initWiFi(){
 
 }
 
-void initDisplay(){
-    // tft.begin();
-    // tft.initR(INITR_144GREENTAB); 
-    tft.init(240, 240, SPI_MODE3);           // Init ST7789 240x240
-    // SPI.setDataMode(SPI_MODE2);
-
-    tft.setRotation(rotation);
-    // tft.setFont(&FreeMono9pt7b);
-}
 void initTFT(){
 
   #ifdef DEBUG
@@ -2175,8 +2166,8 @@ void initTFT(){
 
     // Start up the TFT and show the boot screen
     // tft.begin();
-    // tft.initR(INITR_144GREENTAB); 
-    tft.init(240, 240, SPI_MODE3);           // Init ST7789 240x240
+    tft.initR(INITR_144GREENTAB); 
+    // tft.init(240, 240, SPI_MODE3);           // Init ST7789 240x240
     tft.setRotation(rotation);
     // tft.setFont(&FreeMono9pt7b);
     
