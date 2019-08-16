@@ -46,6 +46,21 @@ HISTORY:
 
 // #include <Fonts/FreeMono9pt7b.h>
 
+
+/**
+ * Encoder Library
+ */
+#include <ClickEncoder.h>
+
+#define ENCODER_PINA     4
+#define ENCODER_PINB     5
+#define ENCODER_BTN      -1
+
+#define ENCODER_STEPS_PER_NOTCH    1   // Change this depending on which encoder is used
+
+ClickEncoder encoder = ClickEncoder(ENCODER_PINA,ENCODER_PINB,ENCODER_BTN,ENCODER_STEPS_PER_NOTCH);
+
+
 // used to obtain the size of an array of any type
 #define ELEMENTS(x)   (sizeof(x) / sizeof(x[0]))
 
@@ -86,12 +101,14 @@ RM_tft tft = RM_tft(TFT_CS, TFT_DC, TFT_RST);
 // #define MAXCS   13
 // #define MAXCLK  12
 
-#define MAXDO   5 // HWMISO
+// #define MAXDO   5 // HWMISO
 #define MAXCS   D1 // 2
-#define MAXCLK  4 // HWSLK
+// #define MAXCLK  4 // HWSLK 
 Adafruit_MAX31855 tc(MAXCS);
 
+#ifdef TC2
 Adafruit_MAX31855 tcB(D0);
+#endif
 
 // Adafruit_MAX31855 tc(MAXCLK, MAXCS, MAXDO);
 // Initialise the MAX31855 IC for thermocouple tempterature reading
@@ -100,9 +117,9 @@ Adafruit_MAX31855 tcB(D0);
 uint16_t rotation = 3;
 
 uint16_t textsize_1 = 1;
-uint16_t textsize_2 = 2;
-uint16_t textsize_3 = 3;
-uint16_t textsize_4 = 4;
+uint16_t textsize_2 = 1;
+uint16_t textsize_3 = 2;
+uint16_t textsize_4 = 3;
 uint16_t textsize_5 = 5;
 
 // #ifdef ESP8266
@@ -116,9 +133,9 @@ uint16_t textsize_5 = 5;
 #define BUTTON2 A0 // menu buttons
 #define BUTTON3 A0 // menu buttons
 
-#define BUZZER 5  // buzzer
-#define FAN    5  // fan control
-#define RELAY  4   // relay control
+#define BUZZER 0  // buzzer
+#define FAN    0  // fan control
+#define RELAY  D3   // relay control
 
 // #define PWMRANGE 255 // esp8266 1024
 
@@ -194,6 +211,19 @@ byte state; // 0 = ready, 1 = warmup, 2 = reflow, 3 = finished, 10 Menu, 11+ set
 byte state_settings = 0;
 byte settings_pointer = 0;
 byte stateStart = 10;
+
+// Menus
+// menuColorA
+// menuColorB
+// menuColorC
+// menuColorD
+// menuColorActive
+// menuColorInactive
+
+int menuSel = 1;
+int menuCount = 3;
+int menuSelX = 0; // hook into printlncenter for now
+int menuSelY = 0; // hook into printlncenter for now
 
 // Initialise an array to hold 4 profiles
 // Increase this array if you plan to add more
@@ -476,6 +506,7 @@ String getTcStatus(){
   else return "ERROR";
 }
 
+#ifdef TC2
 String getTcStatusB(){
   // tc.read();
   uint8_t tcStatus = tcB.readError();
@@ -486,16 +517,19 @@ String getTcStatusB(){
   else if(tcStatus == STATUS_NOREAD) return "Read Failed";
   else return "ERROR";
 }
+#endif
 
 void doLoop()
 {
 
+  processEncoder();
   serialLoop();
   safetyCheck();
+  processEncoder();
 
-  checkButtonAnalog();
+  // checkButtonAnalog();
   // Used by OneButton to poll for button inputs
-  button0.tick();
+  // button0.tick();
   // button1.tick();
   // button2.tick();
   // button3.tick();
@@ -568,9 +602,13 @@ void doLoop()
       nextTempRead = millis() + tempSampleRate;
       // We show the current probe temp in the men screen just for info
       ReadCurrentTemp();
-      ReadCurrentTempB();
       Serial.println((String)currentTemp);
+      
+      #ifdef TC2
+      ReadCurrentTempB();
       Serial.println((String)currentTempB);
+      #endif
+
       if ( currentTemp > 0 )
       {
         Serial.println("deviation: " + (String)(maxT-minT));
@@ -583,15 +621,19 @@ void doLoop()
         int third = tft.width()/4;
         // println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
         println_Center( tft, "  "+String( ( currentTemp ) )+"c  +/-" + (String)(maxT-minT), tft.width() / 2, ( tft.height() / 2 ) + 10 );
+        
+        #ifdef TC2
         if(currentTempB > 0) println_Center( tft, "  "+String( ( currentTempB ) )+"c", tft.width() / 2, ( tft.height() / 2 ) + 30 );
         else println_Center( tft, "errorB " + getTcStatusB(),tft.width() / 2,( tft.height() / 2 ) + 30 );
+        #endif
+
         maxT = minT = currentTemp;
       }
       else{
         tft.setTextSize(textsize_2);
         tft.setTextColor( RED, BLACK );
-        println_Center( tft, "error " + getTcStatus(),tft.width() / 2,( tft.height() / 2 ) + 10 );
-        // println_Center( tft, "error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) + 10 );
+        // println_Center( tft, "error " + getTcStatus(),tft.width() / 2,( tft.height() / 2 ) + 10 );
+        println_Center( tft, "error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) + 10 );
       }
     }
     ReadCurrentTemp();
@@ -906,6 +948,7 @@ void ReadCurrentTemp()
   else currentTemp = tc.readCelsius() + set.tempOffset;
 }
 
+#ifdef TC2
 // Read the temp probe
 void ReadCurrentTempB()
 {
@@ -918,6 +961,7 @@ void ReadCurrentTempB()
   if(useInternal) currentTempB = internal + set.tempOffset;
   else currentTempB = tcB.readCelsius() + set.tempOffset;
 }
+#endif
 
 // This is where the magic happens for temperature matching
 void MatchTemp()
@@ -1276,12 +1320,18 @@ void ShowPaste()
    ShowMenuOptions( true );
 }
 
+void selectMenu(){
+
+}
+
+
+
 void ShowMenuOptions( bool clearAll )
 {
     #ifdef DEBUG
     Serial.println("ShowMenuOptions");
     #endif  
-  int buttonPosY[] = { 19, 74, 129, 184 };
+  int buttonPosY[] = { 19, 74, 129, 184 }; // @todo use auto height 55px
   int buttonHeight = 16;
   int buttonWidth = 4;
 
@@ -1291,16 +1341,25 @@ void ShowMenuOptions( bool clearAll )
   if ( clearAll )
   {
     // Clear All
-    for ( int i = 0; i < 4; i++ )
+    for ( int i = 0; i < 4; i++ ){
       tft.fillRect( tft.width()-100,  buttonPosY[i]-2, 100, buttonHeight+4, BLACK );
       delay(0);
+    }
+    // menuSel = 0; 
   }
   if ( state == 10 )
   {
+    menuCount = 3;
+    if(menuSel > 0){
+      Serial.println("menusel: " + (String)menuSel);
+      menuSelY = buttonPosY[menuSel-1] + 8;
+    }  
+
     // button 0
+
     tft.fillRect( tft.width()-5,  buttonPosY[0], buttonWidth, buttonHeight, GREEN );
     println_Right( tft, "START", tft.width()- 27, buttonPosY[0] + 8 );
-  
+
      // button 1
     tft.fillRect( tft.width()-5,  buttonPosY[1], buttonWidth, buttonHeight, RED );
     println_Right( tft, "SETTINGS", tft.width()- 27, buttonPosY[1] + 8 );
@@ -1308,16 +1367,17 @@ void ShowMenuOptions( bool clearAll )
     // button 3
     tft.fillRect( tft.width()-5,  buttonPosY[3], buttonWidth, buttonHeight, YELLOW );
     println_Right( tft, "OVEN CHECK", tft.width()- 27, buttonPosY[3] + 8 );
+
     return;
   }
   else if ( state == 11 )
   {
+    menuCount += 4;
     // button 0
     tft.fillRect( tft.width()-100,  buttonPosY[0]-2, 100, buttonHeight+4, BLACK );
     tft.fillRect( tft.width()-5,  buttonPosY[0], buttonWidth, buttonHeight, GREEN );
     switch ( settings_pointer )
       {
-
         case 1:
         case 2:
         case 3:
@@ -2149,6 +2209,10 @@ void println_Right( RM_tft &d, String heading, int centerX, int centerY )
     int16_t  x1, y1;
     uint16_t ww, hh;
 
+    Serial.println(centerY);
+    Serial.println(menuSelY);
+    if(menuSel > 0 && menuSelY == centerY) heading = "-> "+heading;
+    Serial.println(heading);
     d.getTextBounds( string2char(heading), x, y, &x1, &y1, &ww, &hh );
     d.setCursor( centerX + ( 18 - ww ), centerY - hh / 2);
     d.println( heading );
@@ -2191,6 +2255,17 @@ void initTC(){
   #endif
 }
 
+void initButtons(){
+  // encoder, not using button here
+  // encoder.setButtonHeldEnabled(true);
+  // encoder.setDoubleClickEnabled(true);
+  // encoder.setButtonOnPinZeroEnabled(true);
+  // encoder.setAccelerationEnabled(true);
+
+  Serial.print("Encoder Acceleration is ");
+  Serial.println((encoder.getAccelerationEnabled()) ? "enabled" : "disabled");  
+}
+
 void setup()
 {
 
@@ -2229,6 +2304,7 @@ void setup()
 
   initTFT();  
   initTC();  
+  initButtons();
 
   // just wait a bit before we try to load settings from FLASH
   delay(500);
@@ -2255,6 +2331,41 @@ void setup()
   // delay for initial temp probe read to be garbage
   delay(500);
   state = 0;
+}
+
+void processEncoder(){
+  static uint32_t lastService = 0;
+  if (micros() - lastService >= 1000) {
+    lastService = micros();                
+    encoder.service();  
+  }
+
+  static int16_t last, value;
+  value += encoder.getValue();
+  
+  if (value != last) {
+    // Serial.print("Encoder Value: ");
+    Serial.print(value);
+    // Serial.print(" Dir: ");
+    Serial.print("\t");
+    // Serial.print(" Steps: ");
+    Serial.print(value-last);
+    Serial.print("\t");
+    Serial.println((value > last) ? "10" : "20");
+
+    if(value > last)menuSel++;
+    if(value < last)menuSel--;
+    if(menuSel < 0) menuSel = 0;
+    last = value;
+
+    ShowMenuOptions(true);
+
+    // click noise?
+    // analogWriteFreq(100);
+    // analogWrite(BUZZER,512);
+    // delay(5);
+    // analogWrite(BUZZER,0);
+  }
 }
 
 void loop(){
