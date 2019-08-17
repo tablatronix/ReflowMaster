@@ -23,13 +23,28 @@ HISTORY:
 27/08/2018 v1.02  - Added tangents to the curve for ESP32 support, Improved graph curves, fixed some UI glitches, made end graph time value be the end profile time
 28/08/2018 v1.03  - Added some graph smoothig
 ---------------------------------------------------------------------------
+
+-- tablatronix esp8266 mods
+
+0
+1 TX, enabled optional, can be used as an output for indicator or neopixel
+2
+3 RX BUZZER, RX disabled serial
+4 ENC A
+5 ENC B
+12 SCLK
+13 MISO
+14 MOSI
+15 CS MAX31855
+16 
+A0 extra inputs via resistor ladder, thermistor ssr measurement
+
 */
 
 /*
  * NOTE: This is a work in progress...
  */
 #include <ESP8266WiFi.h>
-
 #include <SPI.h>
 #include <spline.h> // http://github.com/kerinin/arduino-splines
 #include "Adafruit_GFX.h" // Library Manager
@@ -46,6 +61,9 @@ HISTORY:
 
 // #include <Fonts/FreeMono9pt7b.h>
 
+#include <Adafruit_NeoPixel.h>
+Adafruit_NeoPixel ind = Adafruit_NeoPixel(1, 2, NEO_GRB + NEO_KHZ800);
+
 // used to obtain the size of an array of any type
 #define ELEMENTS(x)   (sizeof(x) / sizeof(x[0]))
 
@@ -59,7 +77,7 @@ HISTORY:
 // #define TFT_RESET 1
 
 // @TODO use CS and get tft and max31855 working with hspi pins
-#define TFT_DC    D4 // D1
+#define TFT_DC    D1 // D1
 #define TFT_CS    D8 // D2
 #define TFT_RST   D3 // ST7789 CS low, D2 not working
 // Initialise the TFT screen
@@ -2204,7 +2222,8 @@ void setup()
   // pinMode( BUZZER, OUTPUT );
   pinMode( RELAY, OUTPUT );
   // pinMode( FAN, OUTPUT );
-  
+  pinMode(2,OUTPUT);
+
   // pinMode( BUTTON0, INPUT );
   // pinMode( BUTTON1, INPUT );
   // pinMode( BUTTON2, INPUT );
@@ -2259,6 +2278,7 @@ void setup()
 
 void loop(){
   doLoop();
+  setInd();
 }
 
 int round_f(float x){
@@ -2488,3 +2508,28 @@ void serialLoop(){
 //     }
 //   }
 // }
+
+
+void setInd(){
+  static uint32_t lastService = 0;
+  if (lastService + 1000 < millis()) {
+    lastService = millis(); 
+    ind.setPixelColor(0,Wheel(random(255)));
+    ind.show();
+  }
+}
+
+
+uint32_t Wheel(byte WheelPos) {
+//  Serial.println("Wheel: " + String(WheelPos));  
+  WheelPos = 255 - WheelPos;
+  if(WheelPos < 85) {
+    return ind.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  }
+  if(WheelPos < 170) {
+    WheelPos -= 85;
+    return ind.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+  WheelPos -= 170;
+  return ind.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+}
