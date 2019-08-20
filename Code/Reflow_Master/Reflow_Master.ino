@@ -29,13 +29,23 @@ HISTORY:
  * NOTE: This is a work in progress...
  */
 #include <ESP8266WiFi.h>
+#include <ota.h>
+#include <creds.h>
 
 #include <SPI.h>
 #include <spline.h> // http://github.com/kerinin/arduino-splines
 #include "Adafruit_GFX.h" // Library Manager
-// #include "Adafruit_ILI9341.h" // Library Manager
+
+// #define USE_ADAFRUIT_ST7735
+// #define USE_ADAFRUIT_ST7789H
+
+#ifdef USE_ADAFRUIT_ST7735
 #include <Adafruit_ST7735.h> // Hardware-specific library for ST7735
+#elif defined(USE_ADAFRUIT_ST7789)
 #include <Adafruit_ST7789.h> // Hardware-specific library for ST7735
+#else
+#include "Adafruit_ILI9341.h" // Library Manager
+#endif
 
 // #include "MAX31855.h" // by Rob Tillaart Library Manager
 #include "Adafruit_MAX31855.h"
@@ -60,7 +70,6 @@ HISTORY:
 
 ClickEncoder encoder = ClickEncoder(ENCODER_PINA,ENCODER_PINB,ENCODER_BTN,ENCODER_STEPS_PER_NOTCH);
 
-
 // used to obtain the size of an array of any type
 #define ELEMENTS(x)   (sizeof(x) / sizeof(x[0]))
 
@@ -74,16 +83,22 @@ ClickEncoder encoder = ClickEncoder(ENCODER_PINA,ENCODER_PINB,ENCODER_BTN,ENCODE
 // #define TFT_RESET 1
 
 // @TODO use CS and get tft and max31855 working with hspi pins
-#define TFT_DC    D4 // D1
-#define TFT_CS    D8 // D2
-#define TFT_RST   D3 // ST7789 CS low, D2 not working
+#define TFT_DC     0 // D4
+#define TFT_CS    -1 // D2
+#define TFT_RST   -1 // ST7789 CS low, D2 not working
 // Initialise the TFT screen
 // Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RESET);
 // Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 // Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 
-// using RM_tft = Adafruit_ST7789;
+#ifdef USE_ADAFRUIT_ST7735
 using RM_tft = Adafruit_ST7735;
+#elif defined(USE_ADAFRUIT_ST7789)
+using RM_tft = Adafruit_ST7789;
+#else 
+using RM_tft = Adafruit_ILI9341;
+#endif
+
 RM_tft tft = RM_tft(TFT_CS, TFT_DC, TFT_RST);
 
 // NODEMCU hspi
@@ -116,11 +131,19 @@ Adafruit_MAX31855 tcB(D0);
 
 uint16_t rotation = 3;
 
+#ifdef USE_ADAFRUIT_ST7735
 uint16_t textsize_1 = 1;
 uint16_t textsize_2 = 1;
-uint16_t textsize_3 = 2;
-uint16_t textsize_4 = 3;
+uint16_t textsize_3 = 1;
+uint16_t textsize_4 = 2;
+uint16_t textsize_5 = 3;
+#else
+uint16_t textsize_1 = 1;
+uint16_t textsize_2 = 2;
+uint16_t textsize_3 = 3;
+uint16_t textsize_4 = 4;
 uint16_t textsize_5 = 5;
+#endif
 
 // #ifdef ESP8266
 // #define A1 A0
@@ -525,7 +548,6 @@ void doLoop()
   processEncoder();
   serialLoop();
   safetyCheck();
-  processEncoder();
 
   // checkButtonAnalog();
   // Used by OneButton to poll for button inputs
@@ -596,9 +618,11 @@ void doLoop()
   }
   else if ( state == 10 ) // MENU
   {
+    handleOTA();
     if ( nextTempRead < millis() )
     {
-      Serial.println("loop menu");
+      // Serial.println("loop menu");
+      Serial.print(".");
       nextTempRead = millis() + tempSampleRate;
       // We show the current probe temp in the men screen just for info
       ReadCurrentTemp();
@@ -1349,11 +1373,11 @@ void ShowMenuOptions( bool clearAll )
   }
   if ( state == 10 )
   {
-    menuCount = 3;
+    menuCount = 4;
     if(menuSel > 0){
       Serial.println("menusel: " + (String)menuSel);
       menuSelY = buttonPosY[menuSel-1] + 8;
-    }  
+    }
 
     // button 0
 
@@ -1363,6 +1387,10 @@ void ShowMenuOptions( bool clearAll )
      // button 1
     tft.fillRect( tft.width()-5,  buttonPosY[1], buttonWidth, buttonHeight, RED );
     println_Right( tft, "SETTINGS", tft.width()- 27, buttonPosY[1] + 8 );
+
+     // button 2
+    tft.fillRect( tft.width()-5,  buttonPosY[2], buttonWidth, buttonHeight, BLUE );
+    println_Right( tft, "ITEM 3", tft.width()- 27, buttonPosY[2] + 8 );
 
     // button 3
     tft.fillRect( tft.width()-5,  buttonPosY[3], buttonWidth, buttonHeight, YELLOW );
@@ -2211,7 +2239,8 @@ void println_Right( RM_tft &d, String heading, int centerX, int centerY )
 
     Serial.println(centerY);
     Serial.println(menuSelY);
-    if(menuSel > 0 && menuSelY == centerY) heading = "-> "+heading;
+    if(menuSel > 0 && menuSelY == centerY) heading = (String)char(0x10)+(String)" "+(String)heading;
+    else heading = "  " + heading; // hack space
     Serial.println(heading);
     d.getTextBounds( string2char(heading), x, y, &x1, &y1, &ww, &hh );
     d.setCursor( centerX + ( 18 - ww ), centerY - hh / 2);
@@ -2228,10 +2257,14 @@ void initTFT(){
     Serial.println("TFT Begin...");
   #endif
 
-    // Start up the TFT and show the boot screen
-    // tft.begin();
+  #ifdef USE_ADAFRUIT_ST7735
     tft.initR(INITR_144GREENTAB); 
-    // tft.init(240, 240, SPI_MODE3);           // Init ST7789 240x240
+  #elif defined(USE_ADAFRUIT_ST7789)
+    tft.init(240, 240, SPI_MODE3);           // Init ST7789 240x240
+  #else
+    // Start up the TFT and show the boot screen
+    tft.begin();
+  #endif
     tft.setRotation(rotation);
     // tft.setFont(&FreeMono9pt7b);
     
@@ -2256,11 +2289,16 @@ void initTC(){
 }
 
 void initButtons(){
+
+  // clickEncoder library
+  // #define ENC_DECODER ENC_FLAKY
+  // #define ENC_HALFSTEP 0 
+
   // encoder, not using button here
   // encoder.setButtonHeldEnabled(true);
   // encoder.setDoubleClickEnabled(true);
   // encoder.setButtonOnPinZeroEnabled(true);
-  // encoder.setAccelerationEnabled(true);
+  encoder.setAccelerationEnabled(false);
 
   Serial.print("Encoder Acceleration is ");
   Serial.println((encoder.getAccelerationEnabled()) ? "enabled" : "disabled");  
@@ -2295,8 +2333,11 @@ void setup()
   Serial.setDebugOutput(true);
 // #endif
 
-  WiFi.mode(WIFI_OFF);
+  init_ota();
+
+  WiFi.mode(WIFI_STA);
   WiFi.setSleepMode(WIFI_NONE_SLEEP);
+  WiFi.begin(SSID,PASS);
 
   Serial.println(ESP.getFreeHeap());
   Serial.println(ESP.getHeapFragmentation());
@@ -2339,26 +2380,31 @@ void processEncoder(){
     lastService = micros();                
     encoder.service();  
   }
-
+ 
   static int16_t last, value;
   value += encoder.getValue();
+  // if(value!=0)Serial.print(value);
   
-  if (value != last) {
-    // Serial.print("Encoder Value: ");
+  if (abs(value - last) >= 2) {
+  // if (value != last) {
+    Serial.print("Encoder Value: ");
     Serial.print(value);
-    // Serial.print(" Dir: ");
+    Serial.print(" Dir: ");
     Serial.print("\t");
-    // Serial.print(" Steps: ");
+    Serial.print(" Steps: ");
     Serial.print(value-last);
     Serial.print("\t");
     Serial.println((value > last) ? "10" : "20");
 
     if(value > last)menuSel++;
     if(value < last)menuSel--;
-    if(menuSel < 0) menuSel = 0;
+    // if(menuSel < 1) menuSel = 1; // end stops
+    // if(menuSel > menuCount) menuSel = menuCount; // end stops
+    if(menuSel < 1) menuSel = menuCount; // wrap
+    if(menuSel > menuCount) menuSel = 1; //wrap
     last = value;
 
-    ShowMenuOptions(true);
+    ShowMenuOptions(false);
 
     // click noise?
     // analogWriteFreq(100);
