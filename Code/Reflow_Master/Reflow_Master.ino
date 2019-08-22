@@ -39,6 +39,8 @@ HISTORY:
 // #define USE_ADAFRUIT_ST7735
 // #define USE_ADAFRUIT_ST7789H
 
+#include <neoindicator.h>
+
 #ifdef USE_ADAFRUIT_ST7735
 #include <Adafruit_ST7735.h> // Hardware-specific library for ST7735
 #elif defined(USE_ADAFRUIT_ST7789)
@@ -83,9 +85,9 @@ ClickEncoder encoder = ClickEncoder(ENCODER_PINA,ENCODER_PINB,ENCODER_BTN,ENCODE
 // #define TFT_RESET 1
 
 // @TODO use CS and get tft and max31855 working with hspi pins
-#define TFT_DC     0 // D4
-#define TFT_CS    -1 // D2
-#define TFT_RST   -1 // ST7789 CS low, D2 not working
+#define TFT_DC     0 // D3
+#define TFT_CS    -1 // Tied to ground
+#define TFT_RST   -1 // tied to RST - ST7789 CS low, D2 not working
 // Initialise the TFT screen
 // Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RESET);
 // Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
@@ -117,12 +119,12 @@ RM_tft tft = RM_tft(TFT_CS, TFT_DC, TFT_RST);
 // #define MAXCLK  12
 
 // #define MAXDO   5 // HWMISO
-#define MAXCS   D1 // 2
+#define MAXCS   15 // 2
 // #define MAXCLK  4 // HWSLK 
 Adafruit_MAX31855 tc(MAXCS);
 
 #ifdef TC2
-Adafruit_MAX31855 tcB(D0);
+Adafruit_MAX31855 tcB(1);
 #endif
 
 // Adafruit_MAX31855 tc(MAXCLK, MAXCS, MAXDO);
@@ -158,7 +160,7 @@ uint16_t textsize_5 = 5;
 
 #define BUZZER 0  // buzzer
 #define FAN    0  // fan control
-#define RELAY  D3   // relay control
+#define RELAY  2   // relay control
 
 // #define PWMRANGE 255 // esp8266 1024
 
@@ -243,8 +245,8 @@ byte stateStart = 10;
 // menuColorActive
 // menuColorInactive
 
-int menuSel = 1;
-int menuCount = 3;
+int menuSel = 1; // current selected menu item, 1 indexed
+int menuCount = 3; // how many menus currently to scroll select
 int menuSelX = 0; // hook into printlncenter for now
 int menuSelY = 0; // hook into printlncenter for now
 
@@ -452,6 +454,18 @@ void checkButtonAnalog(){
   int th = 100;
   int base = 30; // base noise
   int debounce = 100; //ms
+
+  // only check for single button
+  if(level < base){
+    Serial.println("level:" + (String)level);
+    delay(debounce);
+    if(level > base) return; // debounce
+    selectMenu();
+    delay(500); // @todo add state anti repeat..
+  }
+
+  return;
+
   int button0 = 65;
   int button1 = 195;
   int button2 = 625;
@@ -548,8 +562,8 @@ void doLoop()
   processEncoder();
   serialLoop();
   safetyCheck();
-
-  // checkButtonAnalog();
+  checkButtonAnalog();
+  // 
   // Used by OneButton to poll for button inputs
   // button0.tick();
   // button1.tick();
@@ -1345,10 +1359,13 @@ void ShowPaste()
 }
 
 void selectMenu(){
-
+  Serial.println("menuSelect: " + (String)menuSel);
+       if(menuSel == 1) button0Press();
+  else if(menuSel == 2) button1Press();
+  else if(menuSel == 3) button2Press();
+  else if(menuSel == 4) button3Press();
+  menuSel = 1;
 }
-
-
 
 void ShowMenuOptions( bool clearAll )
 {
@@ -2307,11 +2324,24 @@ void initButtons(){
 void setup()
 {
 
+// #ifdef DEBUG
+  Serial.begin(115200);
+  Serial.setDebugOutput(true);
+// #endif
+
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(SSID,PASS);
+  delay(2000);
+  Serial.println("Connecting to wifi....");
+
   // pinMode(TFT_CS,OUTPUT);
   // digitalWrite(TFT_CS, HIGH);
   
   // pinMode(MAXCS,OUTPUT);
   // digitalWrite(MAXCS, HIGH);
+
+  init_indicator(2);
 
   // Setup all GPIO
   // pinMode( BUZZER, OUTPUT );
@@ -2328,16 +2358,9 @@ void setup()
   // Turn off the SSR - duty cycle of 0
   SetRelayFrequency( 0 );
 
-// #ifdef DEBUG
-  Serial.begin(115200);
-  Serial.setDebugOutput(true);
-// #endif
+
 
   init_ota();
-
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleepMode(WIFI_NONE_SLEEP);
-  WiFi.begin(SSID,PASS);
 
   Serial.println(ESP.getFreeHeap());
   Serial.println(ESP.getHeapFragmentation());
@@ -2416,6 +2439,7 @@ void processEncoder(){
 
 void loop(){
   doLoop();
+  delay(1);
 }
 
 int round_f(float x){
@@ -2441,7 +2465,7 @@ void testTC(){
       }
       // tft.fillScreen(BLACK);
       // Serial.println("loop testTC");
-      Serial.println((String)currentTemp);
+      // Serial.println((String)currentTemp);
       if ( currentTemp > 0 )
       {
         Serial.println("deviation: " + (String)(maxT-minT));
@@ -2463,8 +2487,8 @@ void testTC(){
       }
     if(currentTemp>maxT) maxT = currentTemp;
     if(currentTemp<minT) minT = currentTemp;
-    Serial.println(minT);
-    Serial.println(maxT);
+    // Serial.println(minT);
+    // Serial.println(maxT);
 }
 
 // any button press handler
