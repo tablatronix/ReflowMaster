@@ -52,7 +52,7 @@ HISTORY:
 // #include "MAX31855.h" // by Rob Tillaart Library Manager
 #include "Adafruit_MAX31855.h"
 
-#include "OneButton.h" // Library Manager
+// #include "OneButton.h" // Library Manager
 #include "ReflowMasterProfile.h" 
 // #include <FlashStorage.h> // Library Manager
 
@@ -160,7 +160,7 @@ uint16_t textsize_5 = 5;
 
 #define BUZZER 0  // buzzer
 #define FAN    0  // fan control
-#define RELAY  2   // relay control
+#define RELAY  16   // relay control
 
 // #define PWMRANGE 255 // esp8266 1024
 
@@ -245,7 +245,7 @@ byte stateStart = 10;
 // menuColorActive
 // menuColorInactive
 
-int menuSel = 1; // current selected menu item, 1 indexed
+int menuSel = 0; // current selected menu item, 1 indexed
 int menuCount = 3; // how many menus currently to scroll select
 int menuSelX = 0; // hook into printlncenter for now
 int menuSelY = 0; // hook into printlncenter for now
@@ -307,7 +307,7 @@ int graphOff_y = 240-20;
 Spline baseCurve;
 
 // Initialise the buttons using OneButton library
-OneButton button0(BUTTON0, false);
+// OneButton button0(BUTTON0, false);
 // OneButton button1(BUTTON1, false);
 // OneButton button2(BUTTON2, false);
 // OneButton button3(BUTTON3, false);
@@ -424,7 +424,7 @@ void SetCurrentGraph( int index )
   // Re-interpolate data based on spline
   for( int ii = 0; ii <= graphRangeMax_X; ii+= 1 )
   {
-    Serial.println(solderPaste[ currentGraphIndex ].wantedCurve[ii]);
+    // Serial.println(solderPaste[ currentGraphIndex ].wantedCurve[ii]);
     solderPaste[ currentGraphIndex ].wantedCurve[ii] = baseCurve.value(ii);
     delay(0);
   }
@@ -449,14 +449,26 @@ void SetCurrentGraph( int index )
 }
 
 void checkButtonAnalog(){
+  static int lastanalog = 0;
   // @todo this will have to be reworked and it is very voltage drop dependant
-  int level = analogRead(A0);
-  int th = 100;
-  int base = 30; // base noise
+  int level;
+  // level = analogRead(A0);
+  if(lastanalog + 200 < micros()){
+    // Serial.println("micros: " + String(micros()-lastanalog));
+    // Serial.println(String(micros()-lastanalog));
+    level = analogRead(A0);
+    lastanalog = micros();
+  }
+  else return;
+  // else level = 255;
+
+  level = 255;
+  int th = 20;
+  int base = 5; // base noise
   int debounce = 100; //ms
 
   // only check for single button
-  if(level < base){
+  if(level < th && level > base){
     Serial.println("level:" + (String)level);
     delay(debounce);
     if(level > base) return; // debounce
@@ -556,14 +568,22 @@ String getTcStatusB(){
 }
 #endif
 
-void doLoop()
+void loop()
 {
-
   processEncoder();
   serialLoop();
   safetyCheck();
   checkButtonAnalog();
-  // 
+
+  if(WiFi.status() != WL_CONNECTED){
+    Serial.print(".");
+  }
+
+  delay(200); // service wifi
+
+  // delay(10);
+  // return;
+  //
   // Used by OneButton to poll for button inputs
   // button0.tick();
   // button1.tick();
@@ -640,12 +660,14 @@ void doLoop()
       nextTempRead = millis() + tempSampleRate;
       // We show the current probe temp in the men screen just for info
       ReadCurrentTemp();
-      Serial.println((String)currentTemp);
-      
+      if(currentTemp > 0) Serial.println((String)currentTemp);
+      Serial.println(millis());
       #ifdef TC2
       ReadCurrentTempB();
       Serial.println((String)currentTempB);
       #endif
+
+      String wifi = WiFi.status() == WL_CONNECTED ? (String)char(0x02) : (String)char(0x01);
 
       if ( currentTemp > 0 )
       {
@@ -658,7 +680,7 @@ void doLoop()
         tft.setTextSize(textsize_2);
         int third = tft.width()/4;
         // println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
-        println_Center( tft, "  "+String( ( currentTemp ) )+"c  +/-" + (String)(maxT-minT), tft.width() / 2, ( tft.height() / 2 ) + 10 );
+        println_Center( tft, wifi + "  "+String( ( currentTemp ) )+"c  +/-" + (String)(maxT-minT), tft.width() / 2, ( tft.height() / 2 ) + 10 );
         
         #ifdef TC2
         if(currentTempB > 0) println_Center( tft, "  "+String( ( currentTempB ) )+"c", tft.width() / 2, ( tft.height() / 2 ) + 30 );
@@ -671,7 +693,7 @@ void doLoop()
         tft.setTextSize(textsize_2);
         tft.setTextColor( RED, BLACK );
         // println_Center( tft, "error " + getTcStatus(),tft.width() / 2,( tft.height() / 2 ) + 10 );
-        println_Center( tft, "error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) + 10 );
+        println_Center( tft, wifi + " error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) -5 );
       }
     }
     ReadCurrentTemp();
@@ -878,10 +900,10 @@ void SetRelayFrequency( int duty )
   // calculate the wanted duty based on settings power override
   currentDuty = ((float)duty * set.power );
   currentDuty = constrain( round_f( currentDuty ), 0, 255);
-  // currentDuty = 255-currentDuty; // invert
+  currentDuty = 255-currentDuty; // invert
 
   #ifdef DEBUG
-  // if(duty>0) Serial.println("\n[SetRelayFrequency] " + (String)currentDuty);
+  if(duty>0) Serial.println("\n[SetRelayFrequency] " + (String)currentDuty);
   #endif
   // Write the clamped duty cycle to the RELAY GPIO
   analogWrite( RELAY, currentDuty );
@@ -992,8 +1014,8 @@ void ReadCurrentTempB()
 {
   int status = tcB.readError();
   #ifdef DEBUG
-  Serial.print("tc alt status: ");
-  Serial.println( status );
+  // Serial.print("tc alt status: ");
+  // Serial.println( status );
   #endif
   float internal = tcB.readInternal();
   if(useInternal) currentTempB = internal + set.tempOffset;
@@ -1250,7 +1272,6 @@ void ShowMenu()
   tft.setTextColor( WHITE, BLACK );
     tft.setCursor( 54,152 );
     // tft.println( "Settings Stomped!!" );
-    tft.println(millis());
     // tft.setCursor( 45,216 );
     // tft.println( "Reflow Master - PCB v2018-2, Code v1.03" );  
     println_Center( tft, "Reflow Master - PCB v2018-2, Code v" + ver, tft.width() / 2, tft.height() - 20 );
@@ -1364,7 +1385,7 @@ void selectMenu(){
   else if(menuSel == 2) button1Press();
   else if(menuSel == 3) button2Press();
   else if(menuSel == 4) button3Press();
-  menuSel = 1;
+  menuSel = 0; // reset
 }
 
 void ShowMenuOptions( bool clearAll )
@@ -2254,11 +2275,11 @@ void println_Right( RM_tft &d, String heading, int centerX, int centerY )
     int16_t  x1, y1;
     uint16_t ww, hh;
 
-    Serial.println(centerY);
-    Serial.println(menuSelY);
+    // Serial.println(centerY);
+    // Serial.println(menuSelY);
     if(menuSel > 0 && menuSelY == centerY) heading = (String)char(0x10)+(String)" "+(String)heading;
     else heading = "  " + heading; // hack space
-    Serial.println(heading);
+    // Serial.println(heading);
     d.getTextBounds( string2char(heading), x, y, &x1, &y1, &ww, &hh );
     d.setCursor( centerX + ( 18 - ww ), centerY - hh / 2);
     d.println( heading );
@@ -2326,14 +2347,31 @@ void setup()
 
 // #ifdef DEBUG
   Serial.begin(115200);
-  Serial.setDebugOutput(true);
+  // Serial.setDebugOutput(true);
 // #endif
 
-  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+  init_indicator(2);
+
   WiFi.mode(WIFI_STA);
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.begin(SSID,PASS);
-  delay(2000);
   Serial.println("Connecting to wifi....");
+  
+  while(WiFi.status() != WL_CONNECTED || millis() < 5000){
+    Serial.print(".");
+    delay(200);
+  }
+
+  if(WiFi.status() == WL_CONNECTED){
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+    indSetColor(0,255,0);
+  }
+  else{
+    Serial.println("NOT CONNECTED");
+    indSetColor(255,0,0);
+  }
+  delay(500);
 
   // pinMode(TFT_CS,OUTPUT);
   // digitalWrite(TFT_CS, HIGH);
@@ -2341,11 +2379,12 @@ void setup()
   // pinMode(MAXCS,OUTPUT);
   // digitalWrite(MAXCS, HIGH);
 
-  init_indicator(2);
-
   // Setup all GPIO
   // pinMode( BUZZER, OUTPUT );
+
+  digitalWrite(RELAY,HIGH);
   pinMode( RELAY, OUTPUT );
+
   // pinMode( FAN, OUTPUT );
   
   // pinMode( BUTTON0, INPUT );
@@ -2356,9 +2395,9 @@ void setup()
   analogWriteRange(255); // esp8266 
   analogWriteFreq(120); // min 100hz
   // Turn off the SSR - duty cycle of 0
+  SetRelayFrequency( 255 ); // test pulse
+  delay(1000);
   SetRelayFrequency( 0 );
-
-
 
   init_ota();
 
@@ -2385,7 +2424,7 @@ void setup()
   }
 
   // Attatch button IO for OneButton
-  button0.attachClick(button0Press);
+  // button0.attachClick(button0Press);
   // button1.attachClick(button1Press);
   // button2.attachClick(button2Press);
   // button3.attachClick(button3Press);
@@ -2403,19 +2442,20 @@ void processEncoder(){
     lastService = micros();                
     encoder.service();  
   }
- 
+ int numsteps = 4;
+
   static int16_t last, value;
   value += encoder.getValue();
   // if(value!=0)Serial.print(value);
   
-  if (abs(value - last) >= 2) {
+  if (abs(value - last) >= numsteps) {
   // if (value != last) {
     Serial.print("Encoder Value: ");
     Serial.print(value);
     Serial.print(" Dir: ");
     Serial.print("\t");
     Serial.print(" Steps: ");
-    Serial.print(value-last);
+    Serial.print((value-last)/numsteps);
     Serial.print("\t");
     Serial.println((value > last) ? "10" : "20");
 
@@ -2437,10 +2477,9 @@ void processEncoder(){
   }
 }
 
-void loop(){
-  doLoop();
-  delay(1);
-}
+// void loop(){
+//   doLoop();
+// }
 
 int round_f(float x){
   return (int)round(x);
@@ -2558,7 +2597,6 @@ int getPinMode(uint8_t pin)
 }
 
 
-
 // SERIAL CONSOLE
 #define MAX_NUM_CHARS 16 // maximum number of characters read from the Serial Monitor
 char cmd[MAX_NUM_CHARS];       // char[] to store incoming serial commands
@@ -2669,3 +2707,14 @@ void serialLoop(){
 //     }
 //   }
 // }
+// 
+void scannetworks(){
+  Serial.print("Scan start ... ");
+  int n = WiFi.scanNetworks();
+  Serial.print(n);
+  Serial.println(" network(s) found");
+  for (int i = 0; i < n; i++)
+  {
+    Serial.println(WiFi.SSID(i));
+  }
+}
