@@ -32,10 +32,12 @@ HISTORY:
  */
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
-#elif defined(ESP32)
+#endif
+
+if defined(ESP32)
     #include <WiFi.h>
     #include <esp_wifi.h>
-    #include <analogWrite.h>  // https://github.com/ERROPiX/ESP32_AnalogWrite
+    // #include <analogWrite.h>  // https://github.com/ERROPiX/ESP32_AnalogWrite
 #endif
 
 #include <ota.h>
@@ -2299,7 +2301,7 @@ void println_Right( RM_tft &d, String heading, int centerX, int centerY )
     d.println( heading );
 }
 
-void initWiFi(int timeout){
+void init_WiFi(int timeout){
     // btStop();
     WiFi.mode(WIFI_STA);
     #ifdef ESP8266
