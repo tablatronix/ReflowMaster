@@ -18,6 +18,8 @@ PURPOSE:
 This controller is the software that runs on the Reflow Master toaster oven controller made by Unexpected Maker
 
 HISTORY:
+... tablatronix - adding espxx support, no flash
+
 01/08/2018 v1.0   - Initial release.
 13/08/2018 v1.01  - Settings UI button now change to show SELECT or CHANGE depending on what is selected
 27/08/2018 v1.02  - Added tangents to the curve for ESP32 support, Improved graph curves, fixed some UI glitches, made end graph time value be the end profile time
@@ -28,7 +30,14 @@ HISTORY:
 /*
  * NOTE: This is a work in progress...
  */
+#ifdef ESP8266
 #include <ESP8266WiFi.h>
+#elif defined(ESP32)
+    #include <WiFi.h>
+    #include <esp_wifi.h>
+    #include <analogWrite.h>  // https://github.com/ERROPiX/ESP32_AnalogWrite
+#endif
+
 #include <ota.h>
 #include <creds.h>
 
@@ -453,7 +462,7 @@ void checkButtonAnalog(){
   // @todo this will have to be reworked and it is very voltage drop dependant
   int level;
   // level = analogRead(A0);
-  if(lastanalog + 200 < micros()){
+  if(micros() - lastanalog > 600){
     // Serial.println("micros: " + String(micros()-lastanalog));
     // Serial.println(String(micros()-lastanalog));
     level = analogRead(A0);
@@ -473,7 +482,7 @@ void checkButtonAnalog(){
     delay(debounce);
     if(level > base) return; // debounce
     selectMenu();
-    delay(500); // @todo add state anti repeat..
+    // delay(500); // @todo add state anti repeat..
   }
 
   return;
@@ -570,6 +579,11 @@ String getTcStatusB(){
 
 void loop()
 {
+  if(otastarted){
+    handleOTA();
+    return;
+  }
+
   processEncoder();
   serialLoop();
   safetyCheck();
@@ -579,7 +593,7 @@ void loop()
     Serial.print(".");
   }
 
-  delay(200); // service wifi
+  // delay(500); // service wifi
 
   // delay(10);
   // return;
@@ -2285,8 +2299,33 @@ void println_Right( RM_tft &d, String heading, int centerX, int centerY )
     d.println( heading );
 }
 
-void initWiFi(){
+void initWiFi(int timeout){
+    // btStop();
+    WiFi.mode(WIFI_STA);
+    #ifdef ESP8266
+    WiFi.setSleepMode(WIFI_NONE_SLEEP);
+    #elif defined(ESP32)
+    WiFi.setSleep(false);
+    #endif
 
+    WiFi.begin(SSID,PASS);
+    Serial.println("Connecting to wifi....");
+    
+    while(WiFi.status() != WL_CONNECTED || millis() < timeout){
+      Serial.print(".");
+      delay(200);
+    }
+
+    if(WiFi.status() == WL_CONNECTED){
+      Serial.print("IP: ");
+      Serial.println(WiFi.localIP());
+      indSetColor(0,255,0);
+    }
+    else{
+      Serial.println("NOT CONNECTED");
+      indSetColor(255,0,0);
+    }
+    delay(500);
 }
 
 void initTFT(){
@@ -2298,8 +2337,9 @@ void initTFT(){
   #ifdef USE_ADAFRUIT_ST7735
     tft.initR(INITR_144GREENTAB); 
   #elif defined(USE_ADAFRUIT_ST7789)
-    tft.init(240, 240, SPI_MODE3);           // Init ST7789 240x240
+    tft.init(240, 240, SPI_MODE3);   // Init ST7789 240x240
   #else
+    // default ili9341
     // Start up the TFT and show the boot screen
     tft.begin();
   #endif
@@ -2347,31 +2387,11 @@ void setup()
 
 // #ifdef DEBUG
   Serial.begin(115200);
-  // Serial.setDebugOutput(true);
+  Serial.setDebugOutput(true);
 // #endif
 
   init_indicator(2);
-
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleepMode(WIFI_NONE_SLEEP);
-  WiFi.begin(SSID,PASS);
-  Serial.println("Connecting to wifi....");
-  
-  while(WiFi.status() != WL_CONNECTED || millis() < 5000){
-    Serial.print(".");
-    delay(200);
-  }
-
-  if(WiFi.status() == WL_CONNECTED){
-    Serial.print("IP: ");
-    Serial.println(WiFi.localIP());
-    indSetColor(0,255,0);
-  }
-  else{
-    Serial.println("NOT CONNECTED");
-    indSetColor(255,0,0);
-  }
-  delay(500);
+  init_WiFi(5000); // start wifi wait for 5 seconds
 
   // pinMode(TFT_CS,OUTPUT);
   // digitalWrite(TFT_CS, HIGH);
@@ -2386,14 +2406,13 @@ void setup()
   pinMode( RELAY, OUTPUT );
 
   // pinMode( FAN, OUTPUT );
-  
-  // pinMode( BUTTON0, INPUT );
-  // pinMode( BUTTON1, INPUT );
-  // pinMode( BUTTON2, INPUT );
-  // pinMode( BUTTON3, INPUT );
 
+  #ifdef ESP8266
   analogWriteRange(255); // esp8266 
   analogWriteFreq(120); // min 100hz
+  #elif defined(ESP32)
+  #endif
+
   // Turn off the SSR - duty cycle of 0
   SetRelayFrequency( 255 ); // test pulse
   delay(1000);
@@ -2401,9 +2420,12 @@ void setup()
 
   init_ota();
 
+  #ifdef ESP8266
   Serial.println(ESP.getFreeHeap());
   Serial.println(ESP.getHeapFragmentation());
   Serial.println(ESP.getMaxFreeBlockSize());
+  #elif defined(ESP32)
+  #endif
 
   initTFT();  
   initTC();  
@@ -2422,18 +2444,27 @@ void setup()
     newSettings = true;
     // flash_store.write(set);
   }
+  
+  // init_ioButtons();
+  // digitalWrite(TFT_CS,HIGH);
+
+  // delay for initial temp probe read to be garbage
+  delay(500);
+  state = 0;
+}
+
+void init_ioButtons(){
+  // @depends onebutton library
+  // pinMode( BUTTON0, INPUT );
+  // pinMode( BUTTON1, INPUT );
+  // pinMode( BUTTON2, INPUT );
+  // pinMode( BUTTON3, INPUT );
 
   // Attatch button IO for OneButton
   // button0.attachClick(button0Press);
   // button1.attachClick(button1Press);
   // button2.attachClick(button2Press);
   // button3.attachClick(button3Press);
-  
-// digitalWrite(TFT_CS,HIGH);
-
-  // delay for initial temp probe read to be garbage
-  delay(500);
-  state = 0;
 }
 
 void processEncoder(){
@@ -2548,8 +2579,8 @@ bool anyButton(){
 }
 
 // states GUI
-// @TODO using byte definitions for states but also using second level for reflow 
-// states warmup etc, neds to be refactored a bit
+// @TODO use enum, was using bitflag definitions for states but also using second level for reflow 
+// states warmup etc, needs to be refactored a bit
 // 
 // byte state; // 0 = ready, 1 = warmup, 2 = reflow, 3 = finished, 10 Menu, 11+ settings
 
@@ -2559,7 +2590,7 @@ typedef enum {
     REFLOW   = 2 ,
     FINISHED = 3 ,
     MENU     = 0 ,
-    SETTING  = 11, // above 11 is settings menu options
+    SETTING  = 11, // < 11 is settings menu options
     PASTE    = 12,
     RESET    = 13,
     OVENCHECK = 15,
@@ -2633,7 +2664,7 @@ void process_command(){
     uint32_t arg = (uint32_t)atoi(cmd + 2);
     Serial.print(F("Set freq to: ") );
     Serial.println(arg);
-    analogWriteFreq(arg); // confirm ?
+    // analogWriteFreq(arg); // confirm ?
   }
 
   if (strncmp(cmd,"A ",2) == 0) {
