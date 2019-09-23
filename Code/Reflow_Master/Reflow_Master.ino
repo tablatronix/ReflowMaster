@@ -32,9 +32,7 @@ HISTORY:
  */
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
-#endif
-
-if defined(ESP32)
+#elif defined(ESP32)
     #include <WiFi.h>
     #include <esp_wifi.h>
     // #include <analogWrite.h>  // https://github.com/ERROPiX/ESP32_AnalogWrite
@@ -95,7 +93,7 @@ ClickEncoder encoder = ClickEncoder(ENCODER_PINA,ENCODER_PINB,ENCODER_BTN,ENCODE
 // #define TFT_CS 3
 // #define TFT_RESET 1
 
-// @TODO use CS and get tft and max31855 working with hspi pins
+// @TODO use CS and get tft and max31855 tc with hspi pins
 #define TFT_DC     0 // D3
 #define TFT_CS    -1 // Tied to ground
 #define TFT_RST   -1 // tied to RST - ST7789 CS low, D2 not working
@@ -464,27 +462,28 @@ void checkButtonAnalog(){
   // @todo this will have to be reworked and it is very voltage drop dependant
   int level;
   // level = analogRead(A0);
-  if(micros() - lastanalog > 600){
+  if(micros() - lastanalog > 10000){
     // Serial.println("micros: " + String(micros()-lastanalog));
     // Serial.println(String(micros()-lastanalog));
     level = analogRead(A0);
     lastanalog = micros();
   }
-  else return;
-  // else level = 255;
+  // else return;
+  else level = 255;
 
-  level = 255;
+  // level = 255;
   int th = 20;
   int base = 5; // base noise
   int debounce = 100; //ms
 
   // only check for single button
+  // if(level != 255) Serial.println("level:" + (String)level);
   if(level < th && level > base){
     Serial.println("level:" + (String)level);
     delay(debounce);
-    if(level > base) return; // debounce
+    if(!(level < th && level > base)) return; // debounce
     selectMenu();
-    // delay(500); // @todo add state anti repeat..
+    delay(300); // @todo add state anti repeat..
   }
 
   return;
@@ -696,7 +695,7 @@ void loop()
         tft.setTextSize(textsize_2);
         int third = tft.width()/4;
         // println_Center( tft, "  "+String( round_f( currentTemp ) )+"c  ", tft.width() / 2, ( tft.height() / 2 ) + 10 );
-        println_Center( tft, wifi + "  "+String( ( currentTemp ) )+"c  +/-" + (String)(maxT-minT), tft.width() / 2, ( tft.height() / 2 ) + 10 );
+        println_Center( tft, wifi + "  "+String( ( currentTemp ) )+"c  +/-" + (String)(maxT-minT), tft.width() / 2, ( tft.height() / 2 ) -5 );
         
         #ifdef TC2
         if(currentTempB > 0) println_Center( tft, "  "+String( ( currentTempB ) )+"c", tft.width() / 2, ( tft.height() / 2 ) + 30 );
@@ -1257,7 +1256,7 @@ void ShowMenu()
   SetRelayFrequency( 0 );
 
   // set = flash_store.read();
-  #ifdef DEBUG
+  #ifdef DEBUG`
     Serial.println("TFT Show Menu");
   #endif  
   tft.fillScreen(BLACK);
@@ -1401,7 +1400,7 @@ void selectMenu(){
   else if(menuSel == 2) button1Press();
   else if(menuSel == 3) button2Press();
   else if(menuSel == 4) button3Press();
-  menuSel = 0; // reset
+  // menuSel = 0; // reset breaks arrows pointer 
 }
 
 void ShowMenuOptions( bool clearAll )
@@ -1423,7 +1422,7 @@ void ShowMenuOptions( bool clearAll )
       tft.fillRect( tft.width()-100,  buttonPosY[i]-2, 100, buttonHeight+4, BLACK );
       delay(0);
     }
-    // menuSel = 0; 
+    menuSel = 0; // reset menu selector
   }
   if ( state == 10 )
   {
@@ -1454,7 +1453,12 @@ void ShowMenuOptions( bool clearAll )
   }
   else if ( state == 11 )
   {
-    menuCount += 4;
+    menuCount = 4;
+    if(menuSel > 0){
+      Serial.println("menusel: " + (String)menuSel);
+      menuSelY = buttonPosY[menuSel-1] + 8;
+    }
+
     // button 0
     tft.fillRect( tft.width()-100,  buttonPosY[0]-2, 100, buttonHeight+4, BLACK );
     tft.fillRect( tft.width()-5,  buttonPosY[0], buttonWidth, buttonHeight, GREEN );
@@ -1519,6 +1523,7 @@ void ShowMenuOptions( bool clearAll )
   }
   else if ( state == 1 || state == 2 || state == 16 ) // warmup, reflow, calibration
   {
+    menuCount = 0;
     // button 0
     tft.fillRect( tft.width()-5,  buttonPosY[0], buttonWidth, buttonHeight, GREEN );
     println_Right( tft, "ABORT", tft.width()- 27, buttonPosY[0] + 8 );
@@ -2313,7 +2318,7 @@ void init_WiFi(int timeout){
     WiFi.begin(SSID,PASS);
     Serial.println("Connecting to wifi....");
     
-    while(WiFi.status() != WL_CONNECTED || millis() < timeout){
+    while(WiFi.status() != WL_CONNECTED && millis() < timeout){
       Serial.print(".");
       delay(200);
     }
@@ -2392,6 +2397,7 @@ void setup()
   Serial.setDebugOutput(true);
 // #endif
 
+  initTFT();
   init_indicator(2);
   init_WiFi(5000); // start wifi wait for 5 seconds
 
@@ -2429,14 +2435,14 @@ void setup()
   #elif defined(ESP32)
   #endif
 
-  initTFT();  
+  // initTFT();  // moved to before wifi, can cause issues I have read
   initTC();  
   initButtons();
 
   // just wait a bit before we try to load settings from FLASH
-  delay(500);
 
   // load settings from FLASH
+  // delay(500);
   // set = flash_store.read();
 
   // If no settings were loaded, initialise data and save
@@ -2451,7 +2457,7 @@ void setup()
   // digitalWrite(TFT_CS,HIGH);
 
   // delay for initial temp probe read to be garbage
-  delay(500);
+  // delay(500);
   state = 0;
 }
 
@@ -2471,15 +2477,16 @@ void init_ioButtons(){
 
 void processEncoder(){
   static uint32_t lastService = 0;
-  if (micros() - lastService >= 1000) {
+  if (micros() - lastService >= 200) {
     lastService = micros();                
     encoder.service();  
   }
+  encoder.service();  
  int numsteps = 4;
 
   static int16_t last, value;
   value += encoder.getValue();
-  // if(value!=0)Serial.print(value);
+  // if(value!=0) Serial.print(value);
   
   if (abs(value - last) >= numsteps) {
   // if (value != last) {
@@ -2683,10 +2690,28 @@ void process_command(){
     StartReflow();
   }
 
+  if (strncmp(cmd,"B ",2) == 0) {
+    uint8_t arg = (uint8_t)atoi(cmd + 2);
+    Serial.print(F("BUTTON") );
+    Serial.println(arg);
+    doButton(arg);
+  }
+
+  if (strncmp(cmd,"X ",2) == 0) {
+    uint8_t arg = (uint8_t)atoi(cmd + 2);
+    Serial.print(F("REBOOT") );
+    Serial.println(arg);
+    ESP.restart();
+  }
+
   cmd[0] = '\0';         // reset the commandstring
   cmd_complete = false;  // reset command complete 
 }
 
+void doButton(int button){
+    menuSel = button;
+    selectMenu();
+}
 
   void recvChar(void) {
   static byte index = 0;
