@@ -241,12 +241,14 @@ unsigned long nextTimeX = 0;
 int timescale = 1000;
 // int timescale = 60*1000;
 
+// reflow state
 byte state; // 0 = ready, 1 = warmup, 2 = reflow, 3 = finished, 10 Menu, 11+ settings
+byte stateStart = 10; // start state, [menu]
+// menu settings state
 byte state_settings = 0;
 byte settings_pointer = 0;
-byte stateStart = 10;
 
-// Menus
+// Menus Colors
 // menuColorA
 // menuColorB
 // menuColorC
@@ -254,14 +256,19 @@ byte stateStart = 10;
 // menuColorActive
 // menuColorInactive
 
-int menuSel = 0; // current selected menu item, 1 indexed
+// @todo fix datatypes!
+int menuDef   = 0; // default menu item on resets, 0 is none
+int menuSel   = 0; // current selected menu item, 1 indexed
 int menuCount = 3; // how many menus currently to scroll select
-int menuSelX = 0; // hook into printlncenter for now
-int menuSelY = 0; // hook into printlncenter for now
+
+// @todo abstract menu drawing add pointers
+int menuSelX  = 0; // @KLUDGE hook into printlncenter for now
+int menuSelY  = 0; // @KLUDGE hook into printlncenter for now
 
 // Initialise an array to hold 4 profiles
 // Increase this array if you plan to add more
-ReflowGraph solderPaste[5];
+#define NUMPROFILES 5
+ReflowGraph solderPaste[NUMPROFILES];
 // Index into the current profile
 int currentGraphIndex = 0;
 
@@ -675,11 +682,11 @@ void loop()
       nextTempRead = millis() + tempSampleRate;
       // We show the current probe temp in the men screen just for info
       ReadCurrentTemp();
-      if(currentTemp > 0) Serial.println((String)currentTemp);
+      if(currentTemp > 0) Serial.println("[Ta]:" + (String)currentTemp);
       Serial.println(millis());
       #ifdef TC2
       ReadCurrentTempB();
-      Serial.println((String)currentTempB);
+      Serial.println("[Tb]"+(String)currentTempB);
       #endif
 
       String wifi = WiFi.status() == WL_CONNECTED ? (String)char(0x02) : (String)char(0x01);
@@ -1422,7 +1429,7 @@ void ShowMenuOptions( bool clearAll )
       tft.fillRect( tft.width()-100,  buttonPosY[i]-2, 100, buttonHeight+4, BLACK );
       delay(0);
     }
-    menuSel = 0; // reset menu selector
+    menuSel = menuDef; // reset menu selector to 0, @todo allow index 1 for always a select shown
   }
   if ( state == 10 )
   {
@@ -2306,7 +2313,7 @@ void println_Right( RM_tft &d, String heading, int centerX, int centerY )
     d.println( heading );
 }
 
-void init_WiFi(int timeout){
+void initWiFi(int timeout){
     // btStop();
     WiFi.mode(WIFI_STA);
     #ifdef ESP8266
@@ -2315,12 +2322,12 @@ void init_WiFi(int timeout){
     WiFi.setSleep(false);
     #endif
 
+    unsigned long start = millis();
     WiFi.begin(SSID,PASS);
-    Serial.println("Connecting to wifi....");
-    
-    while(WiFi.status() != WL_CONNECTED && millis() < timeout){
+    Serial.println("Connecting to wifi... [" + (String)timeout + " ms]");
+    while(WiFi.status() != WL_CONNECTED && (millis()-start < timeout)){
       Serial.print(".");
-      delay(200);
+      delay(100);
     }
 
     if(WiFi.status() == WL_CONNECTED){
@@ -2347,18 +2354,15 @@ void initTFT(){
     tft.init(240, 240, SPI_MODE3);   // Init ST7789 240x240
   #else
     // default ili9341
-    // Start up the TFT and show the boot screen
     tft.begin();
   #endif
     tft.setRotation(rotation);
     // tft.setFont(&FreeMono9pt7b);
-    
     BootScreen();
 
   #ifdef DEBUG
     Serial.println("Booted Spash Screen");
   #endif
-
 }
 
 void initTC(){
@@ -2399,13 +2403,7 @@ void setup()
 
   initTFT();
   init_indicator(2);
-  init_WiFi(5000); // start wifi wait for 5 seconds
-
-  // pinMode(TFT_CS,OUTPUT);
-  // digitalWrite(TFT_CS, HIGH);
-  
-  // pinMode(MAXCS,OUTPUT);
-  // digitalWrite(MAXCS, HIGH);
+  initWiFi(5000); // start wifi wait for 5 seconds
 
   // Setup all GPIO
   // pinMode( BUZZER, OUTPUT );
@@ -2454,7 +2452,6 @@ void setup()
   }
   
   // init_ioButtons();
-  // digitalWrite(TFT_CS,HIGH);
 
   // delay for initial temp probe read to be garbage
   // delay(500);
@@ -2482,8 +2479,8 @@ void processEncoder(){
     encoder.service();  
   }
   encoder.service();  
- int numsteps = 4;
-
+  int numsteps = 4;
+  
   static int16_t last, value;
   value += encoder.getValue();
   // if(value!=0) Serial.print(value);
@@ -2497,14 +2494,22 @@ void processEncoder(){
     Serial.print(" Steps: ");
     Serial.print((value-last)/numsteps);
     Serial.print("\t");
-    Serial.println((value > last) ? "10" : "20");
+    Serial.println((value > last) ? "10" : "20"); // L:R ints for plotting
 
+    // handle menu select
     if(value > last)menuSel++;
     if(value < last)menuSel--;
-    // if(menuSel < 1) menuSel = 1; // end stops
-    // if(menuSel > menuCount) menuSel = menuCount; // end stops
-    if(menuSel < 1) menuSel = menuCount; // wrap
-    if(menuSel > menuCount) menuSel = 1; //wrap
+
+    bool menuWrap = true; // wrap selector around, skips 0(none), else end stops
+    if(menuWrap){
+      if(menuSel < 1) menuSel = menuCount; // wrap
+      if(menuSel > menuCount) menuSel = 1; //wrap
+    }
+    else {
+      if(menuSel < 1) menuSel = 1; // end stops
+      if(menuSel > menuCount) menuSel = menuCount; // end stops
+    }
+
     last = value;
 
     ShowMenuOptions(false);
@@ -2676,14 +2681,14 @@ void process_command(){
     // analogWriteFreq(arg); // confirm ?
   }
 
-  if (strncmp(cmd,"A ",2) == 0) {
+  if (strncmp(cmd,"A",2) == 0) {
     uint8_t arg = (uint8_t)atoi(cmd + 2);
     Serial.print(F("Abort") );
     Serial.println(arg);
     AbortReflow();
   }
 
-  if (strncmp(cmd,"R ",2) == 0) {
+  if (strncmp(cmd,"R",2) == 0) {
     uint8_t arg = (uint8_t)atoi(cmd + 2);
     Serial.print(F("REFLOW") );
     Serial.println(arg);
