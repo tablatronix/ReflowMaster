@@ -110,7 +110,10 @@ using RM_tft = Adafruit_ST7789;
 using RM_tft = Adafruit_ILI9341;
 #endif
 
+#include <BarGraph.h>
+#define SCALECOLOR 0xFFFF
 RM_tft tft = RM_tft(TFT_CS, TFT_DC, TFT_RST);
+BarGraph bar0;
 
 // NODEMCU hspi
 // HW scl      D5 14
@@ -592,6 +595,8 @@ void loop()
     return;
   }
 
+  // testBargraph();
+
   processEncoder();
   serialLoop();
   safetyCheck();
@@ -601,7 +606,7 @@ void loop()
     Serial.print(".");
   }
 
-  // delay(500); // service wifi
+  delay(500); // service wifi
 
   // delay(10);
   // return;
@@ -1263,7 +1268,7 @@ void ShowMenu()
   SetRelayFrequency( 0 );
 
   // set = flash_store.read();
-  #ifdef DEBUG`
+  #ifdef DEBUG
     Serial.println("TFT Show Menu");
   #endif  
   tft.fillScreen(BLACK);
@@ -2425,6 +2430,7 @@ void setup()
   SetRelayFrequency( 0 );
 
   init_ota();
+  setupOtaCB();
 
   #ifdef ESP8266
   Serial.println(ESP.getFreeHeap());
@@ -2497,8 +2503,9 @@ void processEncoder(){
     Serial.println((value > last) ? "10" : "20"); // L:R ints for plotting
 
     // handle menu select
-    if(value > last)menuSel++;
-    if(value < last)menuSel--;
+    bool encInv = false; // invert encoder rotation
+    if(value > last) encInv ? menuSel-- : menuSel++;
+    if(value < last) encInv ? menuSel++ : menuSel--;
 
     bool menuWrap = true; // wrap selector around, skips 0(none), else end stops
     if(menuWrap){
@@ -2780,4 +2787,63 @@ void scannetworks(){
   {
     Serial.println(WiFi.SSID(i));
   }
+}
+
+void testBargraph(){
+  Serial.println("initbargraph");
+  init_bargraph();
+  
+  tft.setCursor(10,10);
+  tft.println("OTA Update in Progress...");
+
+  // tft.fillRect(20, 50 + 14, 280, 15,  RED);
+  for(int i=0;i<100;i++){
+      update_bargraph(i);
+      delay(50);
+  }
+  bar0.setColor(GREEN, BLACK);
+  update_bargraph(100);  
+  delay(1000);
+
+  tft.setCursor(10,10);
+  tft.println("Rebooting...                     ");
+
+  for(int i=0;i<100;i++){
+      update_bargraph(100-i);
+      delay(50);
+  }
+  bar0.setColor(WHITE, RED);
+  update_bargraph(1);
+  update_bargraph(0);
+  delay(1000);
+}
+
+void init_bargraph(){
+    bar0.begin( 0,  300-20,  20,  50, &tft);  
+    bar0.setColor(WHITE, BLACK);
+    tft.fillScreen(BLACK);
+}
+
+void update_bargraph(int perc){
+  bar0.drawBarHorizontal(perc);  
+}
+
+void setupOtaCB(){
+ArduinoOTA.onStart([]() {
+    otastarted = true;
+    init_bargraph();
+     // Serial.println("\nOTA onStart");
+});
+
+ArduinoOTA.onEnd([]() {
+      otastarted = false;
+      bar0.setColor(GREEN, BLACK);
+      update_bargraph(100);
+      // Serial.println("\nOTA onEnd");
+});
+
+ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+  Serial.printf("OTA Progress: %u%%\n", (progress / (total / 100)));
+  update_bargraph((int)(progress / (total / 100)));
+});
 }
