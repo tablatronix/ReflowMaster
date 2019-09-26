@@ -48,7 +48,9 @@ HISTORY:
 // #define USE_ADAFRUIT_ST7735
 // #define USE_ADAFRUIT_ST7789H
 
+#ifdef USENEOIND
 #include <neoindicator.h>
+#endif
 
 #ifdef USE_ADAFRUIT_ST7735
 #include <Adafruit_ST7735.h> // Hardware-specific library for ST7735
@@ -2338,11 +2340,15 @@ void initWiFi(int timeout){
     if(WiFi.status() == WL_CONNECTED){
       Serial.print("IP: ");
       Serial.println(WiFi.localIP());
+      #ifdef USENEOIND
       indSetColor(0,255,0);
+      #endif
     }
     else{
       Serial.println("NOT CONNECTED");
+      #ifdef USENEOIND
       indSetColor(255,0,0);
+      #endif
     }
     delay(500);
 }
@@ -2407,6 +2413,7 @@ void setup()
 // #endif
 
   initTFT();
+  #ifdef USENEOPIND
   init_indicator(2);
   initWiFi(5000); // start wifi wait for 5 seconds
 
@@ -2485,8 +2492,9 @@ void processEncoder(){
     encoder.service();  
   }
   encoder.service();  
-  int numsteps = 4;
-  
+
+  int numsteps = 1;
+
   static int16_t last, value;
   value += encoder.getValue();
   // if(value!=0) Serial.print(value);
