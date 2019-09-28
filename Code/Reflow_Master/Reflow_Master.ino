@@ -2415,6 +2415,7 @@ void setup()
   initTFT();
   #ifdef USENEOPIND
   init_indicator(2);
+  #endif
   initWiFi(5000); // start wifi wait for 5 seconds
 
   // Setup all GPIO
