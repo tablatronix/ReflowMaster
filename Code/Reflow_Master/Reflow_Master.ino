@@ -78,8 +78,9 @@ HISTORY:
 #define ENCODER_PINB     5
 #define ENCODER_BTN      -1
 
+// int numsteps = 2; // Type 1 
+int numsteps = 4; // Type 2
 #define ENCODER_STEPS_PER_NOTCH    1   // Change this depending on which encoder is used
-
 ClickEncoder encoder = ClickEncoder(ENCODER_PINA,ENCODER_PINB,ENCODER_BTN,ENCODER_STEPS_PER_NOTCH);
 
 // used to obtain the size of an array of any type
@@ -2501,9 +2502,6 @@ void processEncoder(){
   //   encoder.service();  
   // }
   encoder.service();  
-
-  int numsteps = 2; // Type 1 
-  // int numsteps = 4; // Type 2
 
   static int16_t last, value;
   value += encoder.getValue();
