@@ -48,6 +48,8 @@ HISTORY:
 // #define USE_ADAFRUIT_ST7735
 // #define USE_ADAFRUIT_ST7789H
 
+#define USENEOIND
+
 #ifdef USENEOIND
 #include <neoindicator.h>
 #endif
@@ -59,9 +61,6 @@ HISTORY:
 #else
 #include "Adafruit_ILI9341.h" // Library Manager
 #endif
-
-// #include "MAX31855.h" // by Rob Tillaart Library Manager
-#include "Adafruit_MAX31855.h"
 
 // #include "OneButton.h" // Library Manager
 #include "ReflowMasterProfile.h" 
@@ -126,6 +125,9 @@ BarGraph bar0;
 // ESPLED      D4 02
 // boardLED    D0 16
 
+
+// #include "MAX31855.h" // by Rob Tillaart Library Manager (NO HSPI!!)
+#include "Adafruit_MAX31855.h" // Seperate calls for spiread for each function, no raw bit cache!
 
 // MAX 31855 Pins
 // #define MAXDO   14
@@ -234,7 +236,7 @@ bool newSettings = false;
 unsigned long nextTempRead;
 unsigned long nextTempAvgRead;
 int avgReadCount = 0; // running avg
-int avgSamples = 6; // 1 to disable averaging
+int avgSamples = 4;   // 1 to disable averaging
 int tempSampleRate = 1000; // how often to sample temperature when idle
 
 int hotTemp  = 80; // C burn temperature for HOT indication, 0=disable
@@ -479,21 +481,22 @@ void checkButtonAnalog(){
     // Serial.println(String(micros()-lastanalog));
     level = analogRead(A0);
     lastanalog = micros();
+    // Serial.println("level:" + (String)level);
   }
   // else return;
-  else level = 255;
+  else level = 0;
 
   // level = 255;
-  int th = 20;
+  int th = 900;
   int base = 5; // base noise
   int debounce = 100; //ms
 
   // only check for single button
-  // if(level != 255) Serial.println("level:" + (String)level);
-  if(level < th && level > base){
+  // if(level != 0) Serial.println("level:" + (String)level);
+  if(level!=0 && level > th){
     Serial.println("level:" + (String)level);
     delay(debounce);
-    if(!(level < th && level > base)) return; // debounce
+    if(!(level > th && level > base)) return; // debounce
     selectMenu();
     delay(300); // @todo add state anti repeat..
   }
@@ -534,6 +537,7 @@ void checkButtonAnalog(){
 void safetyCheck(){
   // provides some sort of thermal runaway protection,
   // @todo add sanity checking for temperature readings, >0 etc
+  // eg. deviation: 0.75 .[Ta]:2.50 <-- 2C? wtf, bad power?
   // Serial.println("tc status: " + getTcStatus());
   // Serial.println("tc internal: " + (String)tc.readInternal());
 
@@ -608,7 +612,7 @@ void loop()
     Serial.print(".");
   }
 
-  delay(500); // service wifi
+  // delay(500); // service wifi
 
   // delay(10);
   // return;
@@ -721,15 +725,17 @@ void loop()
       else{
         tft.setTextSize(textsize_2);
         tft.setTextColor( RED, BLACK );
-        // println_Center( tft, "error " + getTcStatus(),tft.width() / 2,( tft.height() / 2 ) + 10 );
-        println_Center( tft, wifi + " error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) -5 );
+        println_Center( tft, "                                ",tft.width() / 2,( tft.height() / 2 ) + 10 );
+        println_Center( tft, (String)(millis()/1000) + " error " + getTcStatus(),tft.width() / 2,( tft.height() / 2 ) + 10 );
+        Serial.println("TC: " + getTcStatus());
+        // println_Center( tft, wifi + " error " + (String)millis(),tft.width() / 2,( tft.height() / 2 ) -5 );
       }
-    }
     ReadCurrentTemp();
     if(currentTemp>maxT) maxT = currentTemp;
     if(currentTemp<minT) minT = currentTemp;
     // Serial.println(minT);
     // Serial.println(maxT);
+    }
     return;
   }
   else if ( state == 15 )
@@ -2060,7 +2066,10 @@ void button2Press()
   {
     nextButtonPress = millis() + 20;
     Buzzer( 2000, 50 );
-    if(state == 10) state = 20;
+    if(state == 10){
+      tft.fillScreen(BLACK);
+      state = 20; // tester
+    }  
     if ( state == 11 )
     {
       settings_pointer = constrain( settings_pointer -1, 0, 6 );
@@ -2406,20 +2415,19 @@ void initButtons(){
 
 void setup()
 {
-
 // #ifdef DEBUG
   Serial.begin(115200);
-  Serial.setDebugOutput(true);
+  // Serial.setDebugOutput(true);
 // #endif
 
   initTFT();
-  #ifdef USENEOPIND
+  #ifdef USENEOIND
   init_indicator(2);
   #endif
   initWiFi(5000); // start wifi wait for 5 seconds
 
   // Setup all GPIO
-  // pinMode( BUZZER, OUTPUT );
+  // pinMode( BUZZER, OUTPUT);
 
   digitalWrite(RELAY,HIGH);
   pinMode( RELAY, OUTPUT );
@@ -2488,13 +2496,14 @@ void init_ioButtons(){
 
 void processEncoder(){
   static uint32_t lastService = 0;
-  if (micros() - lastService >= 200) {
-    lastService = micros();                
-    encoder.service();  
-  }
+  // if (micros() - lastService >= 200) {
+  //   lastService = micros();                
+  //   encoder.service();  
+  // }
   encoder.service();  
 
-  int numsteps = 1;
+  int numsteps = 2; // Type 1 
+  // int numsteps = 4; // Type 2
 
   static int16_t last, value;
   value += encoder.getValue();
@@ -2831,6 +2840,7 @@ void init_bargraph(){
     bar0.begin( 0,  300-20,  20,  50, &tft);  
     bar0.setColor(WHITE, BLACK);
     tft.fillScreen(BLACK);
+    tft.println("OTA Update in Progress...");  
 }
 
 void update_bargraph(int perc){
